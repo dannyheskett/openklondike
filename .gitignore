@@ -1,0 +1,14 @@
+build/
+dist/
+.DS_Store
+*.mp4
+*.o
+*.exe
+*.so
+*.a
+third_party/raylib-install*/
+third_party/raylib/
+.vscode/
+*.swp
+*.swo
+*~

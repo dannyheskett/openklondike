@@ -1,0 +1,65 @@
+name: ci
+
+# Runs on every PR targeting main. Each job rebuilds raylib 6.0 from source for
+# its platform (the install dirs are gitignored), then builds openklondike:
+#   - linux:   native gcc, dev (-O2) + release (-O3)
+#   - windows: mingw-w64 cross-compile, x64 + x86
+#   - mac:     clang universal binary, arm64 + x86_64
+# Doc-only changes skip CI. Pushes to main do nothing; merges go through PRs.
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.editorconfig'
+      - 'LICENSE'
+      - 'NOTICE'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: linux (build)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install raylib build + runtime deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libasound2-dev
+      - name: Build raylib (Linux, static)
+        run: ./scripts/build_raylib_linux.sh
+      - name: Run unit tests
+        run: make test
+      - name: Build dev + release
+        run: make all release
+
+  windows:
+    name: windows cross-compile (x64 + x86)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install mingw-w64
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            mingw-w64 mingw-w64-tools binutils-mingw-w64
+      - name: Build raylib (mingw win64 + win32)
+        run: ./scripts/build_raylib_windows.sh
+      - name: Cross-compile Win64 + Win32
+        run: make windows
+
+  mac:
+    name: macOS universal build
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build raylib (universal arm64 + x86_64)
+        run: ./scripts/build_raylib_mac.sh
+      - name: Build universal binary
+        run: make mac

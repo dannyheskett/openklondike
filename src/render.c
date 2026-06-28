@@ -17,7 +17,8 @@
 #define FAN_UP     28   // vertical overlap between face-up tableau cards
 #define FAN_DOWN   12   // tighter overlap for face-down cards
 #define WASTE_FAN  24   // horizontal spread of the 3 drawn waste cards
-#define STATUS_H   28
+#define TITLEBAR_H 44   // top bar carrying the game name
+#define STATUS_H   28   // bottom bar carrying score / time / moves
 
 #define CONTENT_W  (7 * CARD_W + 6 * COL_GAP)   // 7-column board width
 
@@ -61,8 +62,8 @@ static Layout layout_for(int view_w, int view_h) {
     L.left = (view_w - CONTENT_W) / 2;
     if (L.left < MARGIN_X) L.left = MARGIN_X;
     for (int c = 0; c < 7; c++) L.col_x[c] = L.left + c * (CARD_W + COL_GAP);
-    L.top_y  = MARGIN_TOP;
-    L.tab_y  = MARGIN_TOP + CARD_H + ROW_GAP;
+    L.top_y  = TITLEBAR_H + MARGIN_TOP;
+    L.tab_y  = TITLEBAR_H + MARGIN_TOP + CARD_H + ROW_GAP;
     L.view_h = view_h;
     return L;
 }
@@ -234,6 +235,15 @@ static bool is_dragged(const DragState* d, PileKind k, int idx, int card) {
         && card >= d->src_card;
 }
 
+static void draw_titlebar(int view_w) {
+    DrawRectangle(0, 0, view_w, TITLEBAR_H, FELT_DARK);
+    DrawLine(0, TITLEBAR_H, view_w, TITLEBAR_H, SLOT_LINE);
+    const char* title = "OPENKLONDIKE";
+    int fs = 22;
+    int tw = MeasureText(title, fs);
+    DrawText(title, view_w / 2 - tw / 2, (TITLEBAR_H - fs) / 2, fs, TEXT_LIGHT);
+}
+
 static void draw_status(const Game* g, const Layout* L, int view_w) {
     int y = L->view_h - STATUS_H + 4;
     DrawRectangle(0, L->view_h - STATUS_H, view_w, STATUS_H, FELT_DARK);
@@ -256,6 +266,8 @@ static void draw_board(void* vctx, int view_w, int view_h) {
     const DragState* d = ctx->drag;
     ClearBackground(FELT);
     Layout L = layout_for(view_w, view_h);
+
+    draw_titlebar(view_w);
 
     // --- Stock ---
     int sx = L.col_x[SLOT_STOCK], sy = L.top_y;

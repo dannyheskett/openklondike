@@ -13,7 +13,7 @@
 // The minimum window size is just big enough to show the board comfortably.
 // Both dimensions are multiples of 16 so the recorder can capture them.
 #define MIN_W    704
-#define MIN_H    656
+#define MIN_H    704
 
 // A run of cards picked up by the mouse. Owned by main.c, drawn by render.
 typedef struct {

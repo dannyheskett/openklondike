@@ -14,10 +14,10 @@
 #include <time.h>
 
 // Canvas dimensions (must be multiples of 16 for the H.264 encoder).
-// These match render.h MIN_W/MIN_H (704=44*16, 656=41*16): regardless of the live
+// These match render.h MIN_W/MIN_H (both 704 = 44*16): regardless of the live
 // window size, the game is re-rendered at this fixed size for capture.
 #define VID_W      704
-#define VID_H      656
+#define VID_H      704
 #define FPS        60
 #define TIMESCALE  90000
 #define FRAME_DUR  (TIMESCALE / FPS)   // 1500 ticks per frame

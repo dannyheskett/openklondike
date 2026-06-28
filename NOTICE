@@ -1,0 +1,16 @@
+openklondike
+Copyright (c) 2026 Dan Heskett
+Licensed under the MIT License (see LICENSE).
+
+This product bundles the following third-party components, each under its own
+license:
+
+- minih264 (H.264 encoder), a single-header public-domain library.
+  License: CC0 1.0 Universal. See third_party/minih264/LICENSE.
+
+- minimp4 (MP4 muxer), a single-header public-domain library.
+  License: CC0 1.0 Universal. See third_party/minimp4/LICENSE.
+
+openklondike is an original implementation of Klondike solitaire. It is not
+affiliated with, derived from, or endorsed by any other game or its rights
+holders.

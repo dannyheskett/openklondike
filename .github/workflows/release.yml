@@ -72,7 +72,7 @@ jobs:
         run: ./scripts/build_raylib_windows.sh
       - name: Package Linux + Windows archives
         run: make dist-linux dist-windows OPENKLONDIKE_VERSION=${{ needs.prepare.outputs.version }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-windows
           path: dist/*
@@ -87,7 +87,7 @@ jobs:
         run: ./scripts/build_raylib_mac.sh
       - name: Package macOS archive
         run: make dist-mac OPENKLONDIKE_VERSION=${{ needs.prepare.outputs.version }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: mac
           path: dist/*
@@ -101,7 +101,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist-merged
           merge-multiple: true
@@ -116,7 +116,7 @@ jobs:
           git tag "release-$V" "$SHA"
           git push origin "release-$V"
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: release-${{ needs.prepare.outputs.version }}
           name: release-${{ needs.prepare.outputs.version }}

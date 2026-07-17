@@ -31,7 +31,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  guard:
+    uses: ./.github/workflows/attribution-guard.yml
+    permissions:
+      contents: write
+
   prepare:
+    needs: guard
     name: compute next release number
     runs-on: ubuntu-22.04
     outputs:

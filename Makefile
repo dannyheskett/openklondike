@@ -23,7 +23,11 @@ CFLAGS_COMMON := -std=c99 -Wall -Wextra -I$(MINIH264_INC) -I$(MINIMP4_INC) -Isrc
 # Release version: a single integer. The release workflow passes
 # OPENKLONDIKE_VERSION explicitly; for local `make dist` it derives from the
 # latest release-N tag (or 0 if there are none). Only used to name archives.
-OPENKLONDIKE_VERSION ?= $(shell git tag --list 'release-*' 2>/dev/null | sed -n 's/^release-\([1-9][0-9]*\)$$/\1/p' | sort -n | tail -1 | grep . || echo 0)
+# RELEASE_VERSION is the project-neutral name the release workflow passes, so every
+# repo's release.yml is byte-identical. OPENKLONDIKE_VERSION still works as an explicit
+# override (command-line vars beat ?=), and a bare `make dist` still derives from tags.
+RELEASE_VERSION ?= $(shell git tag --list 'release-*' 2>/dev/null | sed -n 's/^release-\([1-9][0-9]*\)$$/\1/p' | sort -n | tail -1 | grep . || echo 0)
+OPENKLONDIKE_VERSION ?= $(RELEASE_VERSION)
 VERSION_SLUG       := build-$(OPENKLONDIKE_VERSION)
 
 # ---------------------------------------------------------------------------

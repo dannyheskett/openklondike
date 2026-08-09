@@ -1,24 +1,7 @@
 name: release
 
-# Runs automatically on every push to main (i.e. when a PR merges), and can also be
-# triggered manually from the Actions tab. Auto-picks the next sequential release-N tag,
-# builds Linux x86_64, Windows x64+x86 and macOS universal binaries, packages each
-# (binary + README + LICENSE + NOTICE) into an archive, and publishes a GitHub Release with
-# the archives + auto notes.
-#
-# Docs-only merges are skipped (they don't change the binaries). paths-ignore is safe HERE
-# -- unlike in ci.yml, nothing requires these checks, so a skipped run blocks nothing.
-#
-# The tag is created in the publish job AFTER all builds succeed, so a failed build leaves N
-# unused and the next run reuses it. The triggering commit SHA is captured up front and used
-# everywhere, so a later push to main does not change what gets tagged. Pushing the
-# release-N tag does not retrigger this workflow (the trigger is branch pushes only, and a
-# GITHUB_TOKEN push starts no workflow anyway).
-#
-# This workflow ends at the GitHub Release. It does NOT touch danheskett.com: the site pulls
-# the published web bundle from releases/latest at its own build time, so nothing here holds
-# a cross-repo write token.
-
+# Thin caller. All logic lives in dannyheskett/.github, shared by every game repo.
+# Every merge to main cuts the next release-N.
 on:
   push:
     branches: [main]
@@ -31,121 +14,15 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write   # create the tag + publish the release
+  contents: write
 
 concurrency:
-  # Never cancel a release mid-build: artifacts won't have a tag and the next run reuses N
-  # anyway, so cancelling just wastes time.
   group: release
   cancel-in-progress: false
 
 jobs:
-  # Gate the whole release on the attribution guard. It also self-triggers on the push, but
-  # wiring it in here means a violating commit can never reach the tag/publish step.
-  guard:
-    uses: ./.github/workflows/attribution-guard.yml
-    permissions:
-      contents: write
-
-  prepare:
-    needs: guard
-    name: compute next release number
-    runs-on: ubuntu-22.04
-    outputs:
-      version: ${{ steps.next.outputs.version }}
-      sha: ${{ steps.next.outputs.sha }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - id: next
-        run: |
-          # Find max N across existing release-N tags; default to 0.
-          last=$(git tag --list 'release-*' \
-                   | sed -n 's/^release-\([1-9][0-9]*\)$/\1/p' \
-                   | sort -n | tail -1)
-          next=$(( ${last:-0} + 1 ))
-          echo "version=$next" >> "$GITHUB_OUTPUT"
-          echo "sha=$GITHUB_SHA"  >> "$GITHUB_OUTPUT"
-          echo "Next release: release-$next at $GITHUB_SHA"
-
-  build-linux-windows:
-    name: linux + windows builds
-    needs: prepare
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install Linux + mingw deps
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          sudo apt-get update
-          # mingw side is C99 only: the two mingw C compilers + binutils, NOT the
-          # `mingw-w64` metapackage (which pulls the g++ toolchain for both arches x
-          # posix/win32 + perl -- 39 packages / 241 MB of unused C++).
-          sudo apt-get install -y --no-install-recommends \
-            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libasound2-dev \
-            gcc-mingw-w64-x86-64 gcc-mingw-w64-i686 binutils-mingw-w64 \
-            zip
-      - name: Build raylib (Linux)
-        run: ./scripts/build_raylib_linux.sh
-      - name: Run unit tests
-        run: make test
-      - name: Build raylib (mingw win64 + win32)
-        run: ./scripts/build_raylib_windows.sh
-      - name: Package Linux + Windows archives
-        run: make dist-linux dist-windows RELEASE_VERSION=${{ needs.prepare.outputs.version }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: linux-windows
-          path: dist/*
-
-  build-mac:
-    name: macOS universal build
-    needs: prepare
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build raylib (universal arm64 + x86_64)
-        run: ./scripts/build_raylib_mac.sh
-      - name: Package macOS archive
-        run: make dist-mac RELEASE_VERSION=${{ needs.prepare.outputs.version }}
-      - uses: actions/upload-artifact@v7
-        with:
-          name: mac
-          path: dist/*
-
-  publish:
-    name: tag + publish GitHub Release
-    needs: [prepare, build-linux-windows, build-mac]
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Download all build artifacts
-        uses: actions/download-artifact@v8
-        with:
-          path: dist-merged
-          merge-multiple: true
-      - run: ls -la dist-merged/
-      - name: Create release-N tag at the dispatched commit
-        env:
-          V: ${{ needs.prepare.outputs.version }}
-          SHA: ${{ needs.prepare.outputs.sha }}
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "release-$V" "$SHA"
-          git push origin "release-$V"
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: release-${{ needs.prepare.outputs.version }}
-          name: release-${{ needs.prepare.outputs.version }}
-          target_commitish: ${{ needs.prepare.outputs.sha }}
-          files: dist-merged/*
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          draft: false
+  release:
+    uses: dannyheskett/.github/.github/workflows/game-release.yml@v1
+    with:
+      platforms: '["linux","windows","mac"]'
+    secrets: inherit

@@ -80,7 +80,39 @@ both to start the same way: the drag begins immediately and feels instant, and
 if the finger never moved, the release turns it into an auto-move instead of a
 drop back where it started.
 
-## 4. The clock had to stop counting frames
+## 4. Both orientations, because this is a card game
+
+The sibling repos lock their phone builds to portrait, and for a falling-block
+game that is obviously right. openklondike inherited the lock by copying, which
+was wrong: a **seven-column** card game reads at least as well sideways, and
+essentially every mobile solitaire offers both.
+
+Unlocking it (`screenOrientation="fullUser"`, and the two landscape entries in
+`UISupportedInterfaceOrientations`) was necessary but not sufficient. The layout
+came out badly on a sideways phone: it caps the card size on whichever axis
+binds, which in landscape is the short one, and then centred seven now-narrow
+columns in a very wide screen. The result used under half the width, and the
+cards came out *smaller* than the same phone gives in portrait. Two changes fix
+it, both in `layout_portrait()`:
+
+- **Ask for three card-heights of playable space instead of four** when the
+  screen is wider than it is tall. Four buys a full tableau column with no fan
+  compression at all, which a sideways phone simply cannot afford; three lets
+  the cards stay a sensible size and hands the difference to the draw-time fan
+  compression, which exists precisely for this.
+- **Spend leftover width on the column gaps**, capped at half a card. In
+  portrait the width pass has already consumed everything, so this does nothing
+  there; in landscape it spreads the board across the screen.
+
+`tests/test_layout.c` asserts both outcomes — that the board uses at least 60%
+of the usable width, and that rotating a phone never shrinks the cards.
+
+Rotation is otherwise free: the board is computed from `GetScreenWidth/Height`
+every frame, the Android Activity declares the relevant `configChanges` so it is
+not restarted mid-game, and the iOS Metal view already recomputed its drawable
+and safe-area insets in `layoutSubviews` / `safeAreaInsetsDidChange`.
+
+## 5. The clock had to stop counting frames
 
 `Game.timer_frames` incremented once per rendered frame and drove both the
 displayed clock and the −2-points-per-10-seconds penalty. With

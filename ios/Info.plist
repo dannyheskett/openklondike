@@ -32,9 +32,16 @@
     <false/>
     <key>UILaunchScreen</key>
     <dict/>
+    <!-- Both orientations: a seven-column card game reads well sideways, and the
+         board is laid out from the live screen size every frame, so a rotation
+         just re-fits it. The Metal view recomputes its drawable and safe-area
+         insets in layoutSubviews / safeAreaInsetsDidChange, which is what makes
+         that free. Upside-down is omitted: iPhone ignores it anyway. -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIDeviceFamily</key>
     <array>

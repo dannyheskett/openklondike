@@ -707,9 +707,14 @@ static MenuLayout menu_layout(int vw, int vh, int rows) {
     m.cx = vw / 2;
 
     if (render_use_scaled()) {
-        m.line_h     = vh / 20;
-        m.item_fs    = vh / 28;
-        m.title_fs   = vh / 16;
+        // Same reference length as the board chrome: the device's long edge, so
+        // the menu is the same physical size upright and sideways. openblocks
+        // uses the view height for these, but it is portrait-locked, where the
+        // two are the same thing.
+        int ref      = (vw > vh) ? vw : vh;
+        m.line_h     = ref / 20;
+        m.item_fs    = ref / 28;
+        m.title_fs   = ref / 16;
         int base     = (vw < vh) ? vw : vh;   // keep the panel compact in a wide window
         m.panel_w    = base * 82 / 100;
         // Shrink the title if it would overrun the panel (wide tablets).

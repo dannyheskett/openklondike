@@ -47,25 +47,34 @@
 // is circular -- a taller bar shrinks the card, which shrinks the bar -- and on
 // a sideways phone it silently inflated the wordmark bar to 96px where this
 // gives 36.
-static int title_fs_of(int view_h)  { int fs = view_h / 45; return (fs < 10) ? 10 : fs; }
-static int title_bar_of(int view_h) { int fs = title_fs_of(view_h); return fs + fs / 2; }
+//
+// The reference length is the device's LONG edge, not the current view height.
+// openblocks is portrait-locked, so its `h / 45` and `h / 38` are always the
+// long edge; this game rotates, and feeding those same divisors the live height
+// halved every number the moment the phone turned sideways -- 60px score text
+// upright, 29px on its side, on one physical screen. Chrome must not resize
+// when the device has not.
+static int chrome_ref(int view_w, int view_h) { return imax(view_w, view_h); }
 
-// The stats line follows openblocks' HUD font rule: the screen HEIGHT over 38.
-// Deriving it from the short dimension instead made it 2.4x smaller on a tall
-// phone -- 25px against 60 on an iPhone 12 -- which is unreadable at arm's
-// length. The band is one line rather than openblocks' two, so its height is
-// 3/2 of the font instead of 2 + 1/3.
-static int stats_fs_of(int view_h) {
-    int fs = view_h / 38;
+static int title_fs_of(int ref)  { int fs = ref / 45; return (fs < 10) ? 10 : fs; }
+static int title_bar_of(int ref) { int fs = title_fs_of(ref); return fs + fs / 2; }
+
+// The stats line follows openblocks' HUD font rule, over the same reference
+// length. Deriving it from the short dimension instead made it 2.4x smaller on
+// a tall phone -- 25px against 60 on an iPhone 12 -- which is unreadable at
+// arm's length. The band is one line rather than openblocks' two, so its height
+// is 3/2 of the font instead of 2 + 1/3.
+static int stats_fs_of(int ref) {
+    int fs = ref / 38;
     return (fs < 9) ? 9 : fs;
 }
-static int stats_h_of(int view_h) { return stats_fs_of(view_h) * 3 / 2; }
+static int stats_h_of(int ref) { return stats_fs_of(ref) * 3 / 2; }
 
 // The wordmark bar, grown to clear a display cutout when the surface draws under
 // one. iOS hands the game a viewport that already excludes the notch, so this
 // only ever fires on Android.
-static int top_bar_of(int view_h) {
-    int bar = title_bar_of(view_h);
+static int top_bar_of(int ref) {
+    int bar = title_bar_of(ref);
     int cut_top, cut_l, cut_r;
     safe_area_get(&cut_top, &cut_l, &cut_r);
     return (cut_top > bar) ? cut_top : bar;
@@ -81,10 +90,11 @@ Layout layout_scaled(int view_w, int view_h) {
     int shortd = (view_w < view_h) ? view_w : view_h;
     int margin = imax(shortd / 28, 6);
 
-    L.titlebar_h = top_bar_of(view_h);
-    L.title_fs   = title_fs_of(view_h);
-    L.status_fs  = stats_fs_of(view_h);
-    L.hud_h      = stats_h_of(view_h);
+    int ref      = chrome_ref(view_w, view_h);
+    L.titlebar_h = top_bar_of(ref);
+    L.title_fs   = title_fs_of(ref);
+    L.status_fs  = stats_fs_of(ref);
+    L.hud_h      = stats_h_of(ref);
     L.hud_y      = L.titlebar_h + margin / 2;
     L.status_h   = 0;   // no bottom bar on touch: it lands on the home indicator
 

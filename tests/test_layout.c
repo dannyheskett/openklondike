@@ -283,19 +283,50 @@ static void test_touch_board_has_no_bottom_bar(void) {
     PASS("no_bottom_bar");
 }
 
-// Sideways, the wordmark bar must be sized from the SCREEN, not the card. Sizing
-// it from the card is circular and inflated it to 96px on an iPhone 12, eating
-// the scarcest axis.
+// Chrome is sized from the SCREEN, not the card -- sizing it from the card is
+// circular and inflated the bar to 96px on an iPhone 12 -- and from the screen's
+// LONG edge, not the live height. Turning the phone must not resize the score
+// text: openblocks reads 60px upright, and feeding these divisors the live
+// height gave 29px the moment this game went sideways, on one physical screen.
 static void test_chrome_is_sized_from_the_screen(void) {
     Layout a = layout_scaled(2250, 1107);
     Layout b = layout_scaled(2250, 1107);
     if (a.titlebar_h != b.titlebar_h) FAIL("chrome", "not deterministic");
-    if (a.titlebar_h > 1107 / 20)
-        FAIL("chrome", "the wordmark bar is too tall for a sideways phone");
-    // Same height, very different width -> same chrome, because it follows height.
-    Layout narrow = layout_scaled(1400, 1107);
-    if (narrow.titlebar_h != a.titlebar_h)
-        FAIL("chrome", "the wordmark bar still depends on the card size");
+
+    // Same screen, rotated: every chrome measure must be identical.
+    Layout up = layout_scaled(1170, 2289);
+    Layout sw = layout_scaled(2289, 1170);
+    if (up.title_fs != sw.title_fs)
+        FAIL("chrome", "the wordmark font changes when the phone rotates");
+    if (up.status_fs != sw.status_fs)
+        FAIL("chrome", "the score font changes when the phone rotates");
+    if (up.hud_h != sw.hud_h)
+        FAIL("chrome", "the stats band changes height when the phone rotates");
+    if (up.titlebar_h != sw.titlebar_h)
+        FAIL("chrome", "the wordmark bar changes height when the phone rotates");
+
+    // It must match what openblocks shows on the same device, upright.
+    if (up.status_fs != 2289 / 38)
+        FAIL("chrome", "the score font does not match openblocks' h/38");
+    if (up.title_fs != 2289 / 45)
+        FAIL("chrome", "the wordmark font does not match openblocks' h/45");
+
+    // ...and still leave the sideways board the bulk of the scarcest axis.
+    if (sw.titlebar_h + sw.hud_h > 1170 / 4)
+        FAIL("chrome", "chrome eats a quarter of a sideways phone");
+
+    // Chrome is a pure function of the screen's long edge. Checking it against
+    // the formula on several shapes is what proves it is not feeding back from
+    // the card size, which is what made it 96px here once.
+    const int shapes[][2] = { {2250,1107}, {1400,1107}, {1170,2289}, {768,1024} };
+    for (unsigned i = 0; i < sizeof shapes / sizeof shapes[0]; i++) {
+        int w = shapes[i][0], h = shapes[i][1];
+        int ref = (w > h) ? w : h;
+        int fs  = ref / 45; if (fs < 10) fs = 10;
+        Layout L = layout_scaled(w, h);
+        if (L.title_fs != fs)
+            FAIL("chrome", "the wordmark bar still depends on the card size");
+    }
     PASS("chrome");
 }
 

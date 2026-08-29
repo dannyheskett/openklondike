@@ -166,8 +166,8 @@ The store uploads (Play internal track, TestFlight) are wired up but dormant:
 each gates on its own secrets, none of which are configured, so today they
 report "skipping" and the release still ships the sideload APK and the unsigned
 `.ipa`. See [`android/play-assets/KEYSTORE.md`](android/play-assets/KEYSTORE.md)
-and [`ios/app-store-assets/README.md`](ios/app-store-assets/README.md) for what
-turns them on.
+and [`ios/app-store-assets/TESTFLIGHT.md`](ios/app-store-assets/TESTFLIGHT.md)
+for the step-by-step on turning each one on.
 
 ## Recording (desktop only)
 

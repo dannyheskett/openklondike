@@ -6,9 +6,8 @@ lives in `ios/Assets.xcassets`, not in this folder.
 
 Nothing here is wired up yet: there is no App Store Connect record and none of
 the `IOS_*` / `ASC_*` secrets are set, so the release workflow produces an
-unsigned `.ipa` and skips the TestFlight upload. Setting those five secrets is
-all that turns it on — see the `build-ios` and `publish-testflight` jobs in
-[`release.yml`](../../.github/workflows/release.yml).
+unsigned `.ipa` and skips the TestFlight upload. **[TESTFLIGHT.md](TESTFLIGHT.md)
+is the step-by-step for turning it on** — no Mac required.
 
 ## Required
 

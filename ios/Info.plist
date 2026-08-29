@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>openklondike</string>
+    <key>CFBundleDisplayName</key>
+    <string>openklondike</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.danheskett.openklondike</string>
+    <key>CFBundleExecutable</key>
+    <string>Openklondike</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <!-- Placeholders. The device build overwrites both from the release number
+         (see IOS_BUILD_NUMBER in the Makefile); App Store Connect rejects an
+         upload whose CFBundleVersion is not greater than the previous one. -->
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <!-- 15.0: the UILaunchScreen dict below needs iOS 14+, and Apple's
+         ITMS-90068 requires 15.0+ for all uploads from Spring 2027. iOS 15
+         runs on the iPhone 6s and later, so this costs no realistic users. -->
+    <key>MinimumOSVersion</key>
+    <string>15.0</string>
+    <!-- openklondike uses no encryption. Declaring this stops App Store Connect
+         asking the export-compliance question on every single upload. -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UIDeviceFamily</key>
+    <array>
+        <integer>1</integer>
+    </array>
+</dict>
+</plist>

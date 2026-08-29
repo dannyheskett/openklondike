@@ -28,3 +28,23 @@ third_party/raylib-install*/
 *~
 .DS_Store
 Thumbs.db
+
+# --- store signing material ---
+# Never commit these: the release workflow decodes the Play keystore and the
+# Apple distribution certificate from secrets at build time.
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+*.p8
+*.b64
+# ...and the material the signing certificate is built from.
+*.key
+*.csr
+*.cer
+*.pem
+
+# Tooling scratch
+.playwright-mcp/
+__pycache__/
+*.pyc

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fullscreen, no title bar, and (API 28+) allow the app to draw into the
+         display cutout / status-bar area on the short edges so there is no black
+         letterbox band above the title bar. Ignored on older devices. -->
+    <style name="OpenklondikeTheme" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

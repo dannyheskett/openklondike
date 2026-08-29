@@ -4,6 +4,13 @@
 #define _FILE_OFFSET_BITS 64
 
 #include "recorder.h"
+#include "platform.h"
+
+// The frame-fidelity mp4 recorder depends on the vendored minih264/minimp4
+// single-header libraries and writes its output to the working directory.
+// Neither is available on the mobile/web builds, so the entire implementation is
+// compiled out there and replaced with no-op stubs at the bottom of the file.
+#ifndef OK_TOUCH
 
 #include "minih264e.h"  // declarations only (implementation is in encode_h264.c)
 #include "minimp4.h"    // declarations only (implementation is in encode_mux.c)
@@ -207,3 +214,15 @@ void recorder_capture(const RenderTexture2D* canvas) {
     }
     s_frame++;
 }
+
+#else // OK_TOUCH: mobile / web -- no recorder.
+
+bool recorder_start(const char* path) { (void)path; return false; }
+void recorder_stop(void)   { }
+bool recorder_toggle(void) { return false; }
+bool recorder_active(void) { return false; }
+#if !defined(PLATFORM_IOS)
+void recorder_capture(const RenderTexture2D* canvas) { (void)canvas; }
+#endif
+
+#endif // OK_TOUCH

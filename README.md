@@ -36,18 +36,17 @@ desktop browser gets the same board as the native app.
   web the fixed layout shrinks to fit rather than running off the edge.
 - **Scaled** (touch) — the board is fitted to the live screen, and every other
   metric (gaps, fans, font sizes) is derived from the resulting card size at the
-  same ratios the fixed layout uses. The arrangement is the classic one in both
-  orientations — stock, waste, a gap and the four foundations across the top of
-  the same seven-column grid the tableau uses — because that is what every
-  established Klondike does. The wordmark bar stays pinned to the top; the
-  score, clock and move count sit in one quiet line beneath it rather than in a
-  bar along the bottom, which on a phone lands on the home indicator. Held
-  sideways the board reserves less tableau depth so the cards can be bigger,
-  leaving deep columns to the fan compression.
+  ratios the fixed layout uses. Both orientations use the classic arrangement:
+  stock, waste, a gap and the four foundations across the top of the same
+  seven-column grid the tableau uses. The wordmark bar is pinned to the top and
+  the score, clock and move count sit in one line beneath it; there is no bottom
+  bar, which on a phone would sit on the home indicator. Sideways the board
+  reserves less tableau depth (2.2 card heights against 4) so the cards can be
+  larger, leaving deep columns to the fan compression.
 
 Either way, a column deeper than the board is tall — up to six face-down cards
-under a full King-to-Ace run — compresses its fan until it fits above the status
-bar, so no card is ever off-screen.
+under a full King-to-Ace run — compresses its fan until it fits, so no card is
+off-screen.
 
 ## Controls
 
@@ -71,7 +70,7 @@ game uses:
   the best tableau build
 - **Drag**: move a card or a run. It lifts clear of your fingertip once the
   gesture is unambiguously a drag, and the pile it would legally land on is
-  highlighted before you let go
+  highlighted
 - **Two-finger tap**: menu (the game stays resumable)
 - **Tap a menu row** to choose it — on the Options screen, tapping a row cycles
   its value; **swipe up / down** moves the selection, **left / right** cycles
@@ -206,9 +205,8 @@ frame-exact regardless of the live window size.
   the club trefoil, raw triangles for the heart/spade/diamond fans.
 - All geometry comes out of a `Layout` (`src/render_internal.h`), computed by
   `src/render_fixed.c` (fixed) or `src/render_scaled.c` (scaled). Those
-  two files supply nothing but numbers; every pixel is drawn by the shared code,
-  which is what makes the two boards one renderer rather than two to keep in
-  sync.
+  two files supply only numbers; every pixel is drawn by the shared code, so the
+  two boards are one renderer rather than two.
 - `src/ok_types.h` supplies raylib-compatible geometry types so the shared code
   compiles without raylib on iOS.
 - Audio is a similar seam (`src/audio.h`): `src/audio_raylib.c` (raylib) vs

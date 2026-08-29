@@ -689,23 +689,60 @@ typedef struct {
     int title_fs, title_y, items_y, line_h, item_fs, pad;
 } MenuLayout;
 
+// Menu geometry. Both boards follow openblocks and openrackem so the three games
+// wear the same furniture.
+//
+//   fixed board   the constants openblocks' landscape menu uses, scaled by the
+//                 same factor the rest of the fixed board is (1.0 at or above
+//                 the minimum window size, smaller only in a browser window
+//                 below it).
+//   scaled board  openblocks' portrait menu: line height h/20, items h/28,
+//                 title h/16, panel 82% of the short screen dimension.
+//
+// The text sizes follow the screen HEIGHT, not the short dimension. On a tall
+// phone the two differ by roughly 2x, which is the difference between a legible
+// menu and an unreadable one.
 static MenuLayout menu_layout(int vw, int vh, int rows) {
     MenuLayout m;
-    int u = (vw < vh) ? vw : vh;
-    m.title_fs = imax(u * 46 / 704, 14);
-    m.item_fs  = imax(u * 22 / 704, 10);
-    m.line_h   = imax(u * 32 / 704, m.item_fs * 3 / 2);
-    m.pad      = imax(u * 26 / 704, 8);
-    int side   = imax(u / 28, 6);
-    m.panel_w  = imax(u * 400 / 704, 160);
-    if (m.panel_w > vw - 2 * side) m.panel_w = vw - 2 * side;
-    m.panel_h  = m.title_fs + 2 * m.pad + rows * m.line_h + m.pad * 2;
-    m.cx       = vw / 2;
-    m.px       = m.cx - m.panel_w / 2;
-    m.py       = (vh - m.panel_h) / 2;
+    m.cx = vw / 2;
+
+    if (render_use_scaled()) {
+        m.line_h     = vh / 20;
+        m.item_fs    = vh / 28;
+        m.title_fs   = vh / 16;
+        int base     = (vw < vh) ? vw : vh;   // keep the panel compact in a wide window
+        m.panel_w    = base * 82 / 100;
+        // Shrink the title if it would overrun the panel (wide tablets).
+        while (m.title_fs > 12 &&
+               gfx_measure_text("OPENKLONDIKE", m.title_fs) > m.panel_w - m.line_h) {
+            m.title_fs -= 2;
+        }
+        m.pad        = m.line_h;
+        m.panel_h    = m.title_fs + m.line_h + rows * m.line_h + m.line_h * 2;
+        m.px         = m.cx - m.panel_w / 2;
+        m.py         = (vh - m.panel_h) / 2;
+        m.title_y    = m.py + m.line_h;
+        m.items_y    = m.py + m.line_h + m.title_fs + m.line_h;
+    } else {
+        // The fixed board's own scale factor: 1.0 at or above the minimum window
+        // size, and only smaller in a browser window below it.
+        int shorter = (vw * MIN_H < vh * MIN_W) ? vw : vh;
+        int denom   = (vw * MIN_H < vh * MIN_W) ? MIN_W : MIN_H;
+        if (shorter > denom) { shorter = denom; }
+        m.line_h   = imax(30 * shorter / denom, 10);
+        m.item_fs  = imax(20 * shorter / denom, 8);
+        m.title_fs = imax(44 * shorter / denom, 12);
+        m.pad      = imax(28 * shorter / denom, 8);
+        m.panel_w  = imax(320 * shorter / denom, 160);
+        m.panel_h  = m.title_fs + 40 * shorter / denom + rows * m.line_h
+                   + 60 * shorter / denom;
+        m.px       = m.cx - m.panel_w / 2;
+        m.py       = (vh - m.panel_h) / 2;
+        m.title_y  = m.py + m.pad;
+        m.items_y  = m.py + m.pad + m.title_fs + m.pad;
+    }
     if (m.py < 0) m.py = 0;
-    m.title_y  = m.py + m.pad;
-    m.items_y  = m.title_y + m.title_fs + m.pad;
+    if (m.panel_w > vw) m.panel_w = vw;
     return m;
 }
 

@@ -50,18 +50,16 @@
 static int title_fs_of(int view_h)  { int fs = view_h / 45; return (fs < 10) ? 10 : fs; }
 static int title_bar_of(int view_h) { int fs = title_fs_of(view_h); return fs + fs / 2; }
 
-// The stats are a footnote, not a scoreboard. Every reference implementation
-// keeps them to one quiet line of small text; an earlier cut gave them
-// openblocks' two-line label-over-value band, which suits a game whose numbers
-// are the main feedback and shouts in one whose numbers are incidental.
-static int stats_fs_of(int view_w, int view_h) {
-    int shortd = (view_w < view_h) ? view_w : view_h;
-    int fs = shortd / 46;
+// The stats line follows openblocks' HUD font rule: the screen HEIGHT over 38.
+// Deriving it from the short dimension instead made it 2.4x smaller on a tall
+// phone -- 25px against 60 on an iPhone 12 -- which is unreadable at arm's
+// length. The band is one line rather than openblocks' two, so its height is
+// 3/2 of the font instead of 2 + 1/3.
+static int stats_fs_of(int view_h) {
+    int fs = view_h / 38;
     return (fs < 9) ? 9 : fs;
 }
-static int stats_h_of(int view_w, int view_h) {
-    return stats_fs_of(view_w, view_h) * 3 / 2;
-}
+static int stats_h_of(int view_h) { return stats_fs_of(view_h) * 3 / 2; }
 
 // The wordmark bar, grown to clear a display cutout when the surface draws under
 // one. iOS hands the game a viewport that already excludes the notch, so this
@@ -85,8 +83,8 @@ Layout layout_scaled(int view_w, int view_h) {
 
     L.titlebar_h = top_bar_of(view_h);
     L.title_fs   = title_fs_of(view_h);
-    L.status_fs  = stats_fs_of(view_w, view_h);
-    L.hud_h      = stats_h_of(view_w, view_h);
+    L.status_fs  = stats_fs_of(view_h);
+    L.hud_h      = stats_h_of(view_h);
     L.hud_y      = L.titlebar_h + margin / 2;
     L.status_h   = 0;   // no bottom bar on touch: it lands on the home indicator
 

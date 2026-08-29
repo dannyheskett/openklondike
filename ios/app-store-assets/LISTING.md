@@ -35,7 +35,7 @@ Editable anytime without submitting a new build — use it for release notes or
 seasonal copy.
 
 ```
-No ads, no tracking, no accounts. Just Klondike solitaire, free and open source.
+Klondike solitaire. Free and open source. No ads, no tracking, no accounts.
 ```
 
 ## Keywords (≤100 chars, comma-separated, no spaces after commas)
@@ -49,32 +49,29 @@ solitaire,klondike,patience,cards,card game,classic,offline,draw three,free cell
 ## Description (≤4000 chars)
 
 ```
-The Klondike solitaire you already know, done properly — and with none of the junk that has crept into this genre.
+The Klondike solitaire you already know. Seven tableau columns, four foundations, draw one or draw three, standard scoring with a clock and a move count. Build the foundations Ace to King to win.
 
-No ads. No tracking. No accounts. No in-app purchases. openklondike never touches the network. It's just the game. You can play it in airplane mode.
+No ads. No tracking. No accounts. No in-app purchases. openklondike never touches the network. It runs in airplane mode.
 
-THE GAME YOU REMEMBER
-• Build the four foundations from Ace to King to win
-• Draw One or Draw Three, your choice, from the Options screen
-• Standard scoring, with the clock and move count along the bottom
-• The bouncing-cards cascade when you win
+THE GAME
+- Draw One or Draw Three, set in Options
+- Standard scoring, with the clock and move count along the bottom
+- The bouncing-cards cascade when you win
 
-CONTROLS MADE FOR A TOUCHSCREEN
-• Tap the deck to deal, tap it again when it's empty to redeal
-• Tap any card to send it home — no hunting for a tiny foundation
-• Drag a card, or a whole run, and it lifts clear of your finger so you can see it
-• The pile you're about to drop on lights up before you let go
-• Two-finger tap for the menu
+TOUCH CONTROLS
+- Tap the deck to deal, tap it again when empty to redeal
+- Tap a card to send it to a foundation, or to the best tableau build
+- Drag a card or a run. It lifts clear of your finger, and the pile it would land on is highlighted
+- Two-finger tap for the menu
+- Portrait and landscape; the board re-fits when you rotate
 
-BUILT RIGHT
-• Cards sized to your screen, from the smallest iPhone up
-• Crisp, minimal visuals that stay out of your way
-• Tiny download, easy on your battery
+BUILT
+- Cards sized to your screen, from a small phone to a tablet
+- Works offline
+- Small download
 
-FREE AND OPEN SOURCE
-openklondike is open source. Read the code, report a bug, or build it yourself: https://github.com/dannyheskett/openklondike
-
-No dark patterns, no "coins", no paywalled decks. Just Klondike.
+OPEN SOURCE
+openklondike is MIT licensed. Read the code or build it yourself: https://github.com/dannyheskett/openklondike
 ```
 
 ## App information

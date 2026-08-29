@@ -100,7 +100,7 @@ async function tap(page, [x, y]) {
 }
 
 // Where the piles are, so the taps below can aim at them. This mirrors
-// layout_portrait() in src/render_portrait.c -- width pass, height pass and gap
+// layout_scaled() in src/render_scaled.c -- width pass, height pass and gap
 // spread, all three, because in landscape it is the height that drives the card
 // size. It exists only to point a mouse at the right card; nothing in the game
 // reads it. If a tap starts landing on bare felt, this is what has drifted out

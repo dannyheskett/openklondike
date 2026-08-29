@@ -35,7 +35,7 @@ double  GetTime(void)                 { return g_time; }
 // The recognizer only asks the renderer two things: which layout is live (the
 // touch path is inert on the desktop one) and how wide a card is, which is what
 // its distance thresholds scale off.
-bool render_use_portrait(void) { return true; }
+bool render_use_scaled(void) { return true; }
 int  render_card_width(void)   { return 120; }   // a phone-sized card
 
 // Start a fresh gesture: no fingers down, no banked state.

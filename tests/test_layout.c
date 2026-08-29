@@ -3,10 +3,14 @@
 //
 // PLATFORM_IOS makes ok_types.h supply the geometry types itself instead of
 // pulling in <raylib.h>, which is what lets the board be computed off-device.
-// That would normally leave only the touch layout compiled, so OK_LANDSCAPE is
-// forced on as well; platform.h then sees both and turns on OK_RUNTIME_RENDERER,
+// That would normally leave only the touch layout compiled, so OK_FIXED is
+// forced on as well; platform.h then sees both and turns on OK_RUNTIME_LAYOUT,
 // exactly as the web build does, so one binary can switch between the fixed
-// desktop board and the scaled touch board with render_set_portrait().
+// desktop board and the scaled touch board with render_set_scaled().
+//
+// Throughout: "fixed" and "scaled" are the two BOARDS. Where a test says
+// landscape or portrait it means the device orientation, which the scaled board
+// supports both of.
 //
 // What is checked is what a player would notice: the desktop board is exactly
 // the fixed size it has always been, the touch board fits whatever screen it is
@@ -14,12 +18,12 @@
 // and -- the part that decides whether a scaled board is playable at all -- a
 // press on a card picks up that card and no other.
 #define PLATFORM_IOS 1
-#define OK_LANDSCAPE 1
+#define OK_FIXED 1
 
 #include "../src/game.c"
 #include "../src/render.c"
-#include "../src/render_landscape.c"
-#include "../src/render_portrait.c"
+#include "../src/render_fixed.c"
+#include "../src/render_scaled.c"
 #include "../src/safe_area.c"
 
 #include <stdio.h>
@@ -57,9 +61,9 @@ int  gfx_measure_text(const char* t, int fs) {
 }
 
 // Point the live layout at a screen size and a board style.
-static void use_screen(int w, int h, bool portrait) {
+static void use_screen(int w, int h, bool scaled) {
     g_screen_w = w; g_screen_h = h;
-    render_set_portrait(portrait);
+    render_set_scaled(scaled);
 }
 
 // The board's right edge: the last column plus a card.
@@ -75,39 +79,39 @@ static int natural_bottom(const Layout* L, int face_down, int face_up) {
 // reproduce the original fixed metrics exactly, and a larger window must move
 // only the margins.
 // --------------------------------------------------------------------------
-static void test_landscape_is_fixed(void) {
-    Layout L = layout_landscape(MIN_W, MIN_H);
+static void test_fixed_board_never_scales(void) {
+    Layout L = layout_fixed(MIN_W, MIN_H);
     if (L.card_w != CARD_W || L.card_h != CARD_H)
-        FAIL("landscape_fixed", "cards are not 80x112 at the minimum size");
+        FAIL("fixed_board", "cards are not 80x112 at the minimum size");
     if (L.col_gap != 16 || L.fan_up != 28 || L.fan_down != 12 || L.waste_fan != 24)
-        FAIL("landscape_fixed", "gap/fan metrics drifted");
+        FAIL("fixed_board", "gap/fan metrics drifted");
     if (L.titlebar_h != 44 || L.status_h != 28)
-        FAIL("landscape_fixed", "bar heights drifted");
+        FAIL("fixed_board", "bar heights drifted");
     if (L.col_x[0] != 24)
-        FAIL("landscape_fixed", "the board is not flush against the 24px margin");
+        FAIL("fixed_board", "the board is not flush against the 24px margin");
     if (board_right(&L) != MIN_W - 24)
-        FAIL("landscape_fixed", "the board does not span the minimum width");
+        FAIL("fixed_board", "the board does not span the minimum width");
 
     // A bigger window: identical cards, board still centred.
-    Layout W = layout_landscape(1600, 1000);
+    Layout W = layout_fixed(1600, 1000);
     if (W.card_w != CARD_W || W.card_h != CARD_H)
-        FAIL("landscape_fixed", "cards scaled up in a large window");
+        FAIL("fixed_board", "cards scaled up in a large window");
     int content = board_right(&W) - W.col_x[0];
     if (W.col_x[0] != (1600 - content) / 2)
-        FAIL("landscape_fixed", "the board is not centred");
-    PASS("landscape_fixed");
+        FAIL("fixed_board", "the board is not centred");
+    PASS("fixed_board");
 }
 
 // A browser window is not bound by SetWindowMinSize, so below the minimum the
 // desktop layout shrinks to fit rather than running off the edge.
-static void test_landscape_shrinks_below_minimum(void) {
-    Layout L = layout_landscape(MIN_W / 2, MIN_H / 2);
-    if (L.card_w >= CARD_W) FAIL("landscape_shrink", "cards did not shrink");
+static void test_fixed_board_shrinks_below_minimum(void) {
+    Layout L = layout_fixed(MIN_W / 2, MIN_H / 2);
+    if (L.card_w >= CARD_W) FAIL("fixed_shrink", "cards did not shrink");
     if (board_right(&L) > MIN_W / 2)
-        FAIL("landscape_shrink", "the board still overflows the viewport");
+        FAIL("fixed_shrink", "the board still overflows the viewport");
     if (L.tab_y + L.card_h + L.status_h > MIN_H / 2)
-        FAIL("landscape_shrink", "the top row and status bar do not fit");
-    PASS("landscape_shrink");
+        FAIL("fixed_shrink", "the top row and status bar do not fit");
+    PASS("fixed_shrink");
 }
 
 // --------------------------------------------------------------------------
@@ -116,7 +120,7 @@ static void test_landscape_shrinks_below_minimum(void) {
 // -- every column must sit inside the viewport horizontally, and the top row
 // plus a normal tableau column must fit vertically above the status bar.
 // --------------------------------------------------------------------------
-static void test_portrait_fits_every_screen(void) {
+static void test_scaled_board_fits_every_screen(void) {
     const struct { int w, h; const char* name; } screens[] = {
         { 1080, 2400, "modern phone" },
         {  720, 1280, "small phone" },
@@ -129,65 +133,65 @@ static void test_portrait_fits_every_screen(void) {
     };
     for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
         int w = screens[i].w, h = screens[i].h;
-        Layout L = layout_portrait(w, h);
+        Layout L = layout_scaled(w, h);
 
-        if (L.card_w <= 0 || L.card_h <= 0) FAIL("portrait_fits", screens[i].name);
+        if (L.card_w <= 0 || L.card_h <= 0) FAIL("scaled_fits", screens[i].name);
         // Inside the viewport, and inside its margins: a board that merely
         // "fits" by running edge to edge has silently eaten them.
         if (L.col_x[0] < L.margin_x || board_right(&L) > w - L.margin_x)
-            FAIL("portrait_fits", screens[i].name);
+            FAIL("scaled_fits", screens[i].name);
         // The top row must clear the title bar and leave the status bar alone.
-        if (L.top_y < L.titlebar_h) FAIL("portrait_fits", screens[i].name);
+        if (L.top_y < L.titlebar_h) FAIL("scaled_fits", screens[i].name);
         if (L.tab_y + L.card_h > h - L.status_h)
-            FAIL("portrait_fits", screens[i].name);
+            FAIL("scaled_fits", screens[i].name);
         // A typical opening column (six face-down under one face-up) fits
         // without needing the draw-time fan compression.
         if (natural_bottom(&L, 6, 1) > h - L.status_h)
-            FAIL("portrait_fits", screens[i].name);
+            FAIL("scaled_fits", screens[i].name);
         // The gaps must stay positive, or columns would touch.
         if (L.col_gap <= 0 || L.fan_up <= 0 || L.fan_down <= 0)
-            FAIL("portrait_fits", screens[i].name);
+            FAIL("scaled_fits", screens[i].name);
     }
-    PASS("portrait_fits");
+    PASS("scaled_fits");
 }
 
 // The touch board scales with the screen: a tablet gets bigger cards than a
 // phone, and both keep the 80:112 card proportion the desktop board uses.
-static void test_portrait_scales_with_the_screen(void) {
-    Layout phone  = layout_portrait(1080, 2400);
-    Layout tablet = layout_portrait(1536, 2048);
+static void test_scaled_board_scales_with_the_screen(void) {
+    Layout phone  = layout_scaled(1080, 2400);
+    Layout tablet = layout_scaled(1536, 2048);
     if (tablet.card_w <= phone.card_w)
-        FAIL("portrait_scales", "a tablet did not get larger cards than a phone");
+        FAIL("scaled_scales", "a tablet did not get larger cards than a phone");
     if (phone.card_w <= CARD_W)
-        FAIL("portrait_scales", "a 1080px-wide phone got desktop-sized cards");
+        FAIL("scaled_scales", "a 1080px-wide phone got desktop-sized cards");
 
-    Layout all[] = { phone, tablet, layout_portrait(720, 1280) };
+    Layout all[] = { phone, tablet, layout_scaled(720, 1280) };
     for (unsigned i = 0; i < sizeof all / sizeof all[0]; i++) {
         int want = all[i].card_w * CARD_H / CARD_W;
         if (all[i].card_h != want)
-            FAIL("portrait_scales", "card aspect ratio drifted from 80:112");
+            FAIL("scaled_scales", "card aspect ratio drifted from 80:112");
     }
-    PASS("portrait_scales");
+    PASS("scaled_scales");
 }
 
 // The touch fan is spread wider than the desktop ratio, because a fingertip
 // needs a bigger target than the 28/80 sliver a mouse can hit -- but never so
 // wide that a run stops looking stacked.
-static void test_portrait_widens_the_fan_for_fingers(void) {
+static void test_scaled_board_widens_the_fan_for_fingers(void) {
     const struct { int w, h; } screens[] = {
         {1080, 2400}, {720, 1280}, {1536, 2048}, {2400, 1080}, {2048, 1536} };
     for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
-        Layout L = layout_portrait(screens[i].w, screens[i].h);
+        Layout L = layout_scaled(screens[i].w, screens[i].h);
         if (L.fan_up < L.card_w * 28 / 80)
-            FAIL("portrait_fan", "the touch fan is tighter than the desktop one");
+            FAIL("scaled_fan", "the touch fan is tighter than the desktop one");
         if (L.fan_up > L.card_h * 2 / 5)
-            FAIL("portrait_fan", "the touch fan spread past two fifths of a card");
+            FAIL("scaled_fan", "the touch fan spread past two fifths of a card");
         // The deepest possible column -- six face-down under a full thirteen-card
         // run -- may need the draw-time compression, but a busy one must not.
         if (natural_bottom(&L, 3, 6) > screens[i].h - L.status_h)
-            FAIL("portrait_fan", "a busy column no longer fits at the wider fan");
+            FAIL("scaled_fan", "a busy column no longer fits at the wider fan");
     }
-    PASS("portrait_fan");
+    PASS("scaled_fan");
 }
 
 // Held sideways, the board must actually use the screen. The first cut of the
@@ -202,7 +206,7 @@ static void test_landscape_uses_the_width(void) {
         { 2048, 1536, "tablet, landscape" },
     };
     for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
-        Layout L = layout_portrait(screens[i].w, screens[i].h);
+        Layout L = layout_scaled(screens[i].w, screens[i].h);
         int usable  = screens[i].w - 2 * L.margin_x;
         int content = board_right(&L) - L.col_x[0];
         if (content * 10 < usable * 6)
@@ -212,8 +216,8 @@ static void test_landscape_uses_the_width(void) {
     }
 
     // Rotating a phone must not shrink the cards.
-    Layout up   = layout_portrait(1080, 2400);
-    Layout side = layout_portrait(2400, 1080);
+    Layout up   = layout_scaled(1080, 2400);
+    Layout side = layout_scaled(2400, 1080);
     if (side.card_w < up.card_w)
         FAIL("landscape_width", "turning the phone sideways made the cards smaller");
     PASS("landscape_width");
@@ -221,20 +225,20 @@ static void test_landscape_uses_the_width(void) {
 
 // A display cutout pushes the title bar (and therefore the whole board) down,
 // so nothing is ever drawn under the front camera.
-static void test_portrait_clears_a_display_cutout(void) {
-    Layout plain = layout_portrait(1080, 2400);
+static void test_scaled_board_clears_a_display_cutout(void) {
+    Layout plain = layout_scaled(1080, 2400);
     // safe_area.c has no setter off Android; the tests reach its state directly,
     // which is the point of including the translation unit.
     s_top = 140;
     s_cutout_left = 460;
     s_cutout_right = 620;
-    Layout notched = layout_portrait(1080, 2400);
+    Layout notched = layout_scaled(1080, 2400);
     if (notched.titlebar_h < 140)
-        FAIL("portrait_cutout", "the title bar does not clear the safe inset");
+        FAIL("scaled_cutout", "the title bar does not clear the safe inset");
     if (notched.top_y <= plain.top_y)
-        FAIL("portrait_cutout", "the board was not pushed below the cutout");
+        FAIL("scaled_cutout", "the board was not pushed below the cutout");
     s_top = s_cutout_left = s_cutout_right = 0;
-    PASS("portrait_cutout");
+    PASS("scaled_cutout");
 }
 
 // --------------------------------------------------------------------------
@@ -251,7 +255,7 @@ static void deep_column(Pile* p) {
 }
 
 static void test_deep_column_stays_on_screen(void) {
-    const struct { int w, h; bool portrait; const char* name; } cases[] = {
+    const struct { int w, h; bool scaled; const char* name; } cases[] = {
         { MIN_W, MIN_H, false, "desktop minimum" },
         { 1600, 1000,   false, "desktop maximised" },
         { 1080, 2400,   true,  "phone" },
@@ -260,7 +264,7 @@ static void test_deep_column_stays_on_screen(void) {
         { 2400, 1080,   true,  "phone, landscape" },
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
-        use_screen(cases[i].w, cases[i].h, cases[i].portrait);
+        use_screen(cases[i].w, cases[i].h, cases[i].scaled);
         Layout L = layout_for(cases[i].w, cases[i].h);
         Pile p;
         deep_column(&p);
@@ -309,7 +313,7 @@ static void probe(const Game* g, const Layout* L, PileKind kind, int index, int 
 }
 
 static void test_hit_testing_round_trips(void) {
-    const struct { int w, h; bool portrait; const char* name; } cases[] = {
+    const struct { int w, h; bool scaled; const char* name; } cases[] = {
         { MIN_W, MIN_H, false, "desktop minimum" },
         { 1600, 1000,   false, "desktop maximised" },
         { 1080, 2400,   true,  "phone" },
@@ -317,7 +321,7 @@ static void test_hit_testing_round_trips(void) {
         { 2400, 1080,   true,  "phone, landscape" },
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
-        use_screen(cases[i].w, cases[i].h, cases[i].portrait);
+        use_screen(cases[i].w, cases[i].h, cases[i].scaled);
         Layout L = layout_for(cases[i].w, cases[i].h);
         Game* g = mid_game();
 
@@ -390,13 +394,13 @@ static void test_drop_targeting(void) {
 }
 
 int main(void) {
-    test_landscape_is_fixed();
-    test_landscape_shrinks_below_minimum();
-    test_portrait_fits_every_screen();
-    test_portrait_scales_with_the_screen();
-    test_portrait_widens_the_fan_for_fingers();
+    test_fixed_board_never_scales();
+    test_fixed_board_shrinks_below_minimum();
+    test_scaled_board_fits_every_screen();
+    test_scaled_board_scales_with_the_screen();
+    test_scaled_board_widens_the_fan_for_fingers();
     test_landscape_uses_the_width();
-    test_portrait_clears_a_display_cutout();
+    test_scaled_board_clears_a_display_cutout();
     test_deep_column_stays_on_screen();
     test_hit_testing_round_trips();
     test_drop_targeting();

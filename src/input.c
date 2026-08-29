@@ -192,10 +192,10 @@ Input input_poll(void) {
     Input in = {0};
 #if !defined(PLATFORM_ANDROID) && !defined(PLATFORM_IOS)
     poll_keys(&in);
-    if (!render_use_portrait()) poll_mouse(&in);
+    if (!render_use_scaled()) poll_mouse(&in);
 #endif
 #ifdef OK_TOUCH
-    if (render_use_portrait()) poll_touch(&in);
+    if (render_use_scaled()) poll_touch(&in);
 #endif
     in.any_pressed = in.any_pressed || in.left_pressed || in.escape_pressed
                    || in.menu_up || in.menu_down || in.select_pressed;

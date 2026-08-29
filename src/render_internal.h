@@ -4,16 +4,20 @@
 // Private interface shared between the renderer translation units:
 //   render.c           -- colours, card art, board/menu drawing, hit testing,
 //                         the win cascade, lifecycle, and layout dispatch
-//   render_landscape.c -- the fixed-size desktop layout   (body under OK_LANDSCAPE)
-//   render_portrait.c  -- the adaptive touch layout       (body under OK_PORTRAIT)
+//   render_fixed.c     -- the fixed-size desktop layout  (body under OK_FIXED)
+//   render_scaled.c    -- the adaptive touch layout      (body under OK_SCALED)
+//
+// "fixed" and "scaled" describe the board, not the device orientation: the
+// scaled board is what phones use, and it runs in either orientation.
 //
 // The two layout files supply nothing but geometry: every pixel is drawn by the
 // shared code in render.c, reading the metrics out of a Layout. That is what
 // makes the scaled touch board and the fixed desktop board the same renderer
 // rather than two that must be kept in sync.
 //
-// render_portrait/landscape.c compile to empty objects on platforms that don't
-// use them, so both can sit in the build's source list unconditionally.
+// render_fixed.c / render_scaled.c compile to empty objects on the platforms
+// that don't use them, so both can sit in the build's source list
+// unconditionally.
 
 #include "render.h"
 #include "gfx.h"
@@ -53,12 +57,12 @@ extern const Color FELT_DARK;
 extern const Color SLOT_LINE;
 extern const Color TEXT_LIGHT;
 
-// Per-layout geometry (defined in render_landscape.c / render_portrait.c).
-#ifdef OK_LANDSCAPE
-Layout layout_landscape(int view_w, int view_h);
+// Per-layout geometry (defined in render_fixed.c / render_scaled.c).
+#ifdef OK_FIXED
+Layout layout_fixed(int view_w, int view_h);
 #endif
-#ifdef OK_PORTRAIT
-Layout layout_portrait(int view_w, int view_h);
+#ifdef OK_SCALED
+Layout layout_scaled(int view_w, int view_h);
 #endif
 
 #endif // OPENKLONDIKE_RENDER_INTERNAL_H

@@ -1,9 +1,9 @@
 // Desktop layout: fixed 80x112 cards on a board that is laid out at a fixed
 // pixel size and centred in the window. Resizing the window moves the margins,
-// never the cards. Compiles to an empty object off OK_LANDSCAPE.
+// never the cards. Compiles to an empty object off OK_FIXED.
 #include "render_internal.h"
 
-#ifdef OK_LANDSCAPE
+#ifdef OK_FIXED
 
 #define MARGIN_X   24
 #define MARGIN_TOP 24
@@ -19,7 +19,7 @@
 
 #define CONTENT_W  (7 * CARD_W + 6 * COL_GAP)   // 7-column board width
 
-Layout layout_landscape(int view_w, int view_h) {
+Layout layout_fixed(int view_w, int view_h) {
     // The cards never scale while the viewport honours the minimum size, and the
     // desktop builds enforce that minimum on the window itself (SetWindowMinSize
     // in render_init). The web build cannot: a browser window is whatever the
@@ -58,4 +58,4 @@ Layout layout_landscape(int view_w, int view_h) {
 #undef S
 }
 
-#endif // OK_LANDSCAPE
+#endif // OK_FIXED

@@ -2,11 +2,11 @@
 // cards scale with the device instead of being a fixed size. Every other metric
 // -- gaps, fans, bar heights, font sizes -- is derived from the resulting card
 // width at the same ratios the desktop layout uses, so the two boards are the
-// same design at different sizes. Compiles to an empty object off OK_PORTRAIT.
+// same design at different sizes. Compiles to an empty object off OK_SCALED.
 #include "render_internal.h"
 #include "safe_area.h"
 
-#ifdef OK_PORTRAIT
+#ifdef OK_SCALED
 
 // Ratios taken from the desktop layout's fixed numbers, so a scaled board keeps
 // the proportions of the 80x112 original: gap 16/80, fans 28/80 and 12/80,
@@ -23,7 +23,7 @@
 // allowed to collapse to zero.
 #define MIN_CARD_W 24
 
-Layout layout_portrait(int view_w, int view_h) {
+Layout layout_scaled(int view_w, int view_h) {
     // Breathing room on every edge, proportional to the short screen dimension
     // so it stays sensible from a phone to a tablet.
     int shortd = (view_w < view_h) ? view_w : view_h;
@@ -131,4 +131,4 @@ Layout layout_portrait(int view_w, int view_h) {
     return L;
 }
 
-#endif // OK_PORTRAIT
+#endif // OK_SCALED

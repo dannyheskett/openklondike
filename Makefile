@@ -15,7 +15,7 @@ MINIH264_INC := third_party/minih264
 MINIMP4_INC  := third_party/minimp4
 
 SRC := src/main.c src/game.c src/tick.c src/input.c \
-       src/render.c src/render_landscape.c src/render_portrait.c src/gfx_raylib.c \
+       src/render.c src/render_fixed.c src/render_scaled.c src/gfx_raylib.c \
        src/safe_area.c \
        src/sound.c src/audio_raylib.c \
        src/recorder.c src/encode_h264.c src/encode_mux.c
@@ -384,7 +384,7 @@ IOS_TEAM_ID       ?=
 # The raylib-backed TUs (gfx_raylib.c, audio_raylib.c) and the recorder encoders
 # are replaced by the ios/ backends, so they are not in this list.
 IOS_C_SRC      := src/main.c src/game.c src/tick.c src/input.c \
-                  src/render.c src/render_landscape.c src/render_portrait.c \
+                  src/render.c src/render_fixed.c src/render_scaled.c \
                   src/safe_area.c src/sound.c src/recorder.c
 IOS_MM_SRC     := ios/ios_main.mm ios/gfx_metal.mm ios/plat_ios.mm ios/audio_ios.mm
 IOS_CFLAGS     := -std=c99   -Wall -Wextra -Isrc -Iios -DPLATFORM_IOS -O2
@@ -496,7 +496,7 @@ $(IOS_IPA): $(IOS_DEPS)
 #                 clock that keeps the play timer at 60 Hz on any display)
 #   test_layout — the two board layouts, compiled -DPLATFORM_IOS so ok_types.h
 #                 supplies the geometry types without raylib, and with
-#                 OK_LANDSCAPE forced on so both can be exercised in one binary
+#                 OK_FIXED forced on so both can be exercised in one binary
 #   test_input  — input.c's touch-gesture recognizer, driven frame-by-frame
 #                 through a scripted touch surface. It is the same C every touch
 #                 platform compiles.

@@ -44,6 +44,16 @@
     down.direction = UISwipeGestureRecognizerDirectionDown;
     down.cancelsTouchesInView = NO;
     [self addGestureRecognizer:down];
+    UISwipeGestureRecognizer* left =
+        [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(onSwipeLeft:)];
+    left.direction = UISwipeGestureRecognizerDirectionLeft;
+    left.cancelsTouchesInView = NO;
+    [self addGestureRecognizer:left];
+    UISwipeGestureRecognizer* right =
+        [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(onSwipeRight:)];
+    right.direction = UISwipeGestureRecognizerDirectionRight;
+    right.cancelsTouchesInView = NO;
+    [self addGestureRecognizer:right];
 
     CADisplayLink* link = [CADisplayLink displayLinkWithTarget:self selector:@selector(onFrame:)];
     link.preferredFramesPerSecond = 60;
@@ -106,6 +116,8 @@
 - (void)onTap:(UITapGestureRecognizer*)g       { (void)g; plat_ios_post_gesture(GESTURE_TAP); }
 - (void)onSwipeUp:(UISwipeGestureRecognizer*)g  { (void)g; plat_ios_post_gesture(GESTURE_SWIPE_UP); }
 - (void)onSwipeDown:(UISwipeGestureRecognizer*)g{ (void)g; plat_ios_post_gesture(GESTURE_SWIPE_DOWN); }
+- (void)onSwipeLeft:(UISwipeGestureRecognizer*)g  { (void)g; plat_ios_post_gesture(GESTURE_SWIPE_LEFT); }
+- (void)onSwipeRight:(UISwipeGestureRecognizer*)g { (void)g; plat_ios_post_gesture(GESTURE_SWIPE_RIGHT); }
 
 @end
 

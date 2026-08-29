@@ -53,7 +53,8 @@ bar, so no card is ever off-screen.
 - **Double-click** a card to send it straight to its foundation
 - **Right-click** a card as a shortcut for the same thing
 - **Escape**: menu &nbsp;·&nbsp; **Alt+Enter**: toggle fullscreen
-- **Up / Down** (or W / S) + **Enter / Space**: menu navigation
+- **Up / Down** (or W / S) + **Enter / Space**: menu navigation;
+  **Left / Right** (or A / D) cycle a value on the Options screen
 
 **Touch** (Android, iOS, and mobile browsers) — the grammar every mobile card
 game uses:
@@ -65,7 +66,8 @@ game uses:
   gesture is unambiguously a drag, and the pile it would legally land on is
   highlighted before you let go
 - **Two-finger tap**: menu (the game stays resumable)
-- **Tap a menu row** to choose it; **swipe up / down** to move the selection
+- **Tap a menu row** to choose it — on the Options screen, tapping a row cycles
+  its value; **swipe up / down** moves the selection, **left / right** cycles
 
 ## Building
 

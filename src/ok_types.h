@@ -41,10 +41,12 @@ static inline bool CheckCollisionPointRec(Vector2 p, Rectangle r) {
 
 // Gesture ids (values match raylib's enum so input.c comparisons are unchanged).
 enum {
-    GESTURE_TAP        = 1,
-    GESTURE_DOUBLETAP  = 2,
-    GESTURE_SWIPE_UP   = 16,
-    GESTURE_SWIPE_DOWN = 32,
+    GESTURE_TAP         = 1,
+    GESTURE_DOUBLETAP   = 2,
+    GESTURE_SWIPE_UP    = 16,
+    GESTURE_SWIPE_DOWN  = 32,
+    GESTURE_SWIPE_LEFT  = 64,
+    GESTURE_SWIPE_RIGHT = 128,
 };
 
 // These are defined in Objective-C++ (plat_ios.mm) but called from the C game

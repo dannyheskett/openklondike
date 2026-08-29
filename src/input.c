@@ -30,8 +30,10 @@ static void poll_keys(Input* in) {
     bool alt = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
     in->fullscreen_toggle = alt && IsKeyPressed(KEY_ENTER);
 
-    in->menu_up   = IsKeyPressed(KEY_UP)   || IsKeyPressed(KEY_W);
-    in->menu_down = IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_S);
+    in->menu_up    = IsKeyPressed(KEY_UP)    || IsKeyPressed(KEY_W);
+    in->menu_down  = IsKeyPressed(KEY_DOWN)  || IsKeyPressed(KEY_S);
+    in->menu_left  = IsKeyPressed(KEY_LEFT)  || IsKeyPressed(KEY_A);
+    in->menu_right = IsKeyPressed(KEY_RIGHT) || IsKeyPressed(KEY_D);
     in->select_pressed = (IsKeyPressed(KEY_ENTER) && !in->fullscreen_toggle)
                        || IsKeyPressed(KEY_SPACE);
 }
@@ -166,10 +168,15 @@ static void poll_touch(Input* in) {
         s_touch.active = false;
     }
 
-    // Swipes drive the menu selection (taps are decided on release, above).
+    // Swipes drive the menu: up/down move the cursor, left/right cycle an
+    // Options value. (Taps are decided on release, above.) These fields are read
+    // only on the menu screens, so a swipe across the board while playing is
+    // ignored rather than doing something surprising to a card.
     int g = GetGestureDetected();
-    if (g == GESTURE_SWIPE_UP)   in->menu_up   = true;
-    if (g == GESTURE_SWIPE_DOWN) in->menu_down = true;
+    if (g == GESTURE_SWIPE_UP)    in->menu_up    = true;
+    if (g == GESTURE_SWIPE_DOWN)  in->menu_down  = true;
+    if (g == GESTURE_SWIPE_LEFT)  in->menu_left  = true;
+    if (g == GESTURE_SWIPE_RIGHT) in->menu_right = true;
 
 #if !defined(PLATFORM_IOS)
     // Android hardware/gesture Back button (KEY_BACK); harmless no-op on web.

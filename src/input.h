@@ -27,7 +27,8 @@ typedef struct {
     bool fullscreen_toggle;  // Alt+Enter
 
     // Menu navigation
-    bool menu_up, menu_down;
+    bool menu_up, menu_down;    // move the menu cursor
+    bool menu_left, menu_right; // cycle an Options value
     bool select_pressed;
     bool any_pressed;
 } Input;

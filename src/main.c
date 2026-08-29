@@ -6,6 +6,7 @@
 #include "app.h"
 #include "tick.h"
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -16,6 +17,7 @@
 
 typedef enum {
     STATE_MENU,
+    STATE_OPTIONS,
     STATE_PLAYING,
     STATE_BOUNCING,
 } AppState;
@@ -23,7 +25,7 @@ typedef enum {
 typedef enum {
     ACT_RESUME,
     ACT_NEW,
-    ACT_DRAW,
+    ACT_OPTIONS,
     ACT_SOUND,
     ACT_RECORD,
     ACT_EXIT,
@@ -49,13 +51,13 @@ static void play_event_sounds(unsigned ev) {
 // all (mobile and web, where the OS or the browser tab owns the lifecycle).
 // Passing a fixed index instead put the gap above whatever happened to be last,
 // which on those builds was an ordinary setting.
-static int build_menu(bool resumable, DrawMode draw,
+static int build_menu(bool resumable,
                       const char** labels, MenuAction* actions, int* gap_before) {
     int n = 0;
     *gap_before = -1;
     if (resumable) { labels[n] = "Resume Game";                     actions[n++] = ACT_RESUME; }
     labels[n] = "New Game";                                         actions[n++] = ACT_NEW;
-    labels[n] = (draw == DRAW_THREE) ? "Draw: Three" : "Draw: One"; actions[n++] = ACT_DRAW;
+    labels[n] = "Options";                                          actions[n++] = ACT_OPTIONS;
     labels[n] = sound_is_enabled() ? "Sound: On" : "Sound: Off";    actions[n++] = ACT_SOUND;
 #ifndef OK_TOUCH
     // The mp4 recorder is a desktop-only feature (stubbed out on mobile/web), so
@@ -71,6 +73,35 @@ static int build_menu(bool resumable, DrawMode draw,
     labels[n] = "Exit";                                             actions[n++] = ACT_EXIT;
 #endif
     return n;
+}
+
+// The Options screen. Klondike has one rule worth exposing -- how many cards a
+// deal turns over -- so this is Draw plus Back. Values cycle with Left/Right, or
+// by selecting the row, which is how a touch player changes them; the last item
+// returns to the menu. Labels are rebuilt every frame from the live settings.
+// Sound and Record stay on the main menu, where a player expects to find them.
+#define OPT_ITEMS 2
+enum { OPT_DRAW, OPT_BACK };
+
+static int build_options(DrawMode draw, const char** labels) {
+    static char buf[OPT_ITEMS][32];
+    snprintf(buf[OPT_DRAW], sizeof buf[0], "Draw: %s",
+             (draw == DRAW_THREE) ? "Three" : "One");
+    snprintf(buf[OPT_BACK], sizeof buf[0], "Back");
+    for (int i = 0; i < OPT_ITEMS; i++) labels[i] = buf[i];
+    return OPT_ITEMS;
+}
+
+// Cycle one Options value by `dir` (+1 / -1).
+static void cycle_option(DrawMode* draw, int item, int dir) {
+    (void)dir;   // Draw has two values, so either direction toggles it
+    switch (item) {
+    case OPT_DRAW:
+        *draw = (*draw == DRAW_ONE) ? DRAW_THREE : DRAW_ONE;
+        break;
+    default:
+        break;
+    }
 }
 
 // App state carried across frames. Kept in one struct so the web and iOS builds
@@ -158,11 +189,11 @@ static void frame_step(void* arg) {
     const char* labels[MAX_MENU_ITEMS];
     MenuAction actions[MAX_MENU_ITEMS];
     int gap_before = -1;
-    int menu_count = build_menu(resumable, c->draw_mode, labels, actions, &gap_before);
-    if (c->selected >= menu_count) c->selected = 0;
+    int menu_count = build_menu(resumable, labels, actions, &gap_before);
 
     switch (c->state) {
     case STATE_MENU: {
+        if (c->selected >= menu_count) c->selected = 0;
         if (in.escape_pressed) {
             // Escape backs out: resume an in-progress game, else exit.
             if (resumable) { c->state = STATE_PLAYING; break; }
@@ -197,8 +228,9 @@ static void frame_step(void* arg) {
                 c->drag.active = false;
                 c->state = STATE_PLAYING;
                 break;
-            case ACT_DRAW:
-                c->draw_mode = (c->draw_mode == DRAW_ONE) ? DRAW_THREE : DRAW_ONE;
+            case ACT_OPTIONS:
+                c->state = STATE_OPTIONS;
+                c->selected = 0;
                 break;
             case ACT_SOUND:
                 sound_toggle();
@@ -212,6 +244,40 @@ static void frame_step(void* arg) {
             }
         }
         break;
+    }
+
+    case STATE_OPTIONS: {
+        const char* opt_labels[OPT_ITEMS];
+        int opt_count = build_options(c->draw_mode, opt_labels);
+        if (c->selected >= opt_count) c->selected = 0;
+        if (in.escape_pressed) {
+            c->state = STATE_MENU;
+            c->selected = 0;
+            break;
+        }
+        if (in.menu_up) {
+            c->selected = (c->selected + opt_count - 1) % opt_count;
+            sound_play(SFX_MENU_MOVE);
+        }
+        if (in.menu_down) {
+            c->selected = (c->selected + 1) % opt_count;
+            sound_play(SFX_MENU_MOVE);
+        }
+        int dir = (in.menu_right ? 1 : 0) - (in.menu_left ? 1 : 0);
+        bool do_select = in.select_pressed;
+        if (in.tap) {
+            int hit = render_menu_hit_test((Vector2){in.tap_x, in.tap_y});
+            if (hit >= 0 && hit < opt_count) { c->selected = hit; do_select = true; }
+        }
+        if (do_select && c->selected == OPT_BACK) {
+            c->state = STATE_MENU;
+            c->selected = 0;
+            sound_play(SFX_MENU_SELECT);
+        } else if (dir != 0 || do_select) {
+            cycle_option(&c->draw_mode, c->selected, dir ? dir : 1);
+            sound_play(SFX_MENU_SELECT);
+        }
+        break; // rendered by the per-state dispatch below
     }
 
     case STATE_PLAYING: {
@@ -321,6 +387,12 @@ static void frame_step(void* arg) {
     case STATE_MENU:
         render_menu("OPENKLONDIKE", labels, menu_count, c->selected, gap_before);
         break;
+    case STATE_OPTIONS: {
+        const char* opt_labels[OPT_ITEMS];
+        int opt_count = build_options(c->draw_mode, opt_labels);
+        render_menu("OPTIONS", opt_labels, opt_count, c->selected, OPT_BACK);
+        break;
+    }
     case STATE_PLAYING:
         render_frame(c->game, &c->drag);
         break;

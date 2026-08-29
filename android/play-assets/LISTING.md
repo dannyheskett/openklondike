@@ -41,7 +41,7 @@ No ads. No tracking. No accounts. No in-app purchases. openklondike requests zer
 
 THE GAME YOU REMEMBER
 • Build the four foundations from Ace to King to win
-• Draw One or Draw Three, your choice, from the menu
+• Draw One or Draw Three, your choice, from the Options screen
 • Standard scoring, with the clock and move count along the bottom
 • The bouncing-cards cascade when you win
 

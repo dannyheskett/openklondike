@@ -132,28 +132,46 @@ wordmark bar the height, the stats band the *short* dimension (the board is
 fitted to the width, so a height-derived font came out enormous next to the
 cards on a tall phone).
 
-## 6. Sideways, the board rearranges
+## 6. Sideways: bigger cards, not a cleverer arrangement
 
-A top row of stock, waste and foundations costs a whole card height. Upright
-that is cheap; sideways it is the scarcest thing there is. So past 1.6:1 the
-board rearranges: stock and waste into a rail down the left, the four
-foundations into a 2x2 block on the right, and the seven tableau columns take
-the entire height between the bars — ten card columns across instead of seven.
+The first attempt at fixing landscape rearranged the board — stock and waste
+into a rail down the left, the four foundations into a 2x2 block on the right,
+so the seven tableau columns could take the whole height. The numbers were good:
+96% of the width used, 3.5 card heights of tableau against 2.5.
 
-On an iPhone 12 (2250x1107 of safe area) that is:
+It looked wrong, and it was thrown away.
+
+Checking what established Klondike actually does settled it. **World of
+Solitaire** (responsive, and it fills a landscape viewport) and **Green Felt**
+both use one classic top row — stock, a gap, the four foundations in columns 4-7
+of the *same* seven-column grid the tableau uses. Neither splits the piles into
+rails. Neither stacks foundations. That row is how a player reads a Klondike
+board, and breaking it costs more in familiarity than it wins in pixels.
+
+Two more things those references settle:
+
+- **They do not maximise card size to fill the width.** World of Solitaire's
+  board sits centred at about 63% of a 2250px-wide viewport, with generous
+  margins. Filling the width is not the goal; a comfortable card is.
+- **The stats are a footnote.** One thin line of small text. An earlier cut gave
+  them openblocks' two-line label-over-value HUD band, which is right for a game
+  whose numbers are the primary feedback and shouts in one where they are
+  incidental.
+
+So landscape keeps the classic arrangement and simply reserves less tableau
+depth — 2.2 card heights rather than the 4 it asks for upright — which lets the
+cards grow and hands deep columns to the draw-time fan compression that exists
+for exactly that. On an iPhone 12:
 
 | | card | chrome | board width | tableau |
 | --- | --- | --- | --- | --- |
-| before | 176x246 | 96 + 60 | 77% | 2.5 card heights |
-| after | 184x257 | 36 + 67 | 96% | 3.5 card heights |
+| original | 176x246 | 96 + 60 | 77% | 2.5 card heights |
+| rails (rejected) | 184x257 | 36 + 67 | 96% | 3.5 card heights |
+| **now** | **188x263** | **36 + 36** | 75% | 2.3 card heights |
 
-The 1.6:1 gate matters. Rails cost three extra columns of width, which only pays
-for itself when height is genuinely scarce. A tablet turned sideways is about
-1.33:1 and has height to spare; giving it rails made its cards *smaller* than
-the same tablet upright (164px against 174px). Keeping the row there gives it
-205px instead. `tests/test_layout.c` pins that, along with the rule that no two
-piles may overlap — an invariant the old single row of seven could not break by
-construction, and ten hand-placed piles very much can.
+The empty band below the board does not fully go away, and should not be
+designed away: a seven-column board on a 2:1 screen does not fill it, and the
+references leave the same gap.
 
 ## 7. The clock had to stop counting frames
 

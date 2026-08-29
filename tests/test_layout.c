@@ -178,8 +178,14 @@ static void test_scaled_board_scales_with_the_screen(void) {
 // needs a bigger target than the 28/80 sliver a mouse can hit -- but never so
 // wide that a run stops looking stacked.
 static void test_scaled_board_widens_the_fan_for_fingers(void) {
-    const struct { int w, h; } screens[] = {
-        {1080, 2400}, {720, 1280}, {1536, 2048}, {2400, 1080}, {2048, 1536} };
+    // Upright only for the "fits without compression" half: sideways the board
+    // deliberately reserves less tableau depth (2.2 card heights rather than 4)
+    // so the cards can be bigger, and hands deep columns to the draw-time fan
+    // compression instead. test_deep_column asserts that compression keeps even
+    // the worst case on screen.
+    const struct { int w, h; bool upright; } screens[] = {
+        {1080, 2400, true}, {720, 1280, true}, {1536, 2048, true},
+        {2400, 1080, false}, {2048, 1536, false} };
     for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
         Layout L = layout_scaled(screens[i].w, screens[i].h);
         if (L.fan_up < L.card_w * 28 / 80)
@@ -187,9 +193,9 @@ static void test_scaled_board_widens_the_fan_for_fingers(void) {
         if (L.fan_up > L.card_h * 2 / 5)
             FAIL("scaled_fan", "the touch fan spread past two fifths of a card");
         // The deepest possible column -- six face-down under a full thirteen-card
-        // run -- may need the draw-time compression, but a busy one must not.
-        if (natural_bottom(&L, 3, 6) > L.tab_bottom)
-            FAIL("scaled_fan", "a busy column no longer fits at the wider fan");
+        // run -- may need the draw-time compression, but upright a busy one must not.
+        if (screens[i].upright && natural_bottom(&L, 3, 6) > L.tab_bottom)
+            FAIL("scaled_fan", "a busy column no longer fits upright at the wider fan");
     }
     PASS("scaled_fan");
 }
@@ -293,26 +299,35 @@ static void test_chrome_is_sized_from_the_screen(void) {
     PASS("chrome");
 }
 
-// Rails are for phones on their side, not for anything merely wider than tall.
-// They cost three extra columns of width; on a tablet at ~1.33:1 that made the
-// cards SMALLER than the same tablet gives upright, which is the opposite of
-// the point.
-static bool uses_rails(const Layout* L) { return L->stock_x < L->tab_x[0]; }
-
-static void test_rails_only_where_they_pay(void) {
-    Layout phone = layout_scaled(2250, 1107);   // 2.03:1
-    if (!uses_rails(&phone)) FAIL("rails_gate", "a phone on its side did not get rails");
-
-    Layout tablet = layout_scaled(2048, 1536);  // 1.33:1
-    if (uses_rails(&tablet)) FAIL("rails_gate", "a tablet on its side got rails");
-
-    Layout upright = layout_scaled(1536, 2048);
-    if (tablet.card_w < upright.card_w)
-        FAIL("rails_gate", "turning a tablet sideways made the cards smaller");
-
-    Layout portrait = layout_scaled(1170, 2289);
-    if (uses_rails(&portrait)) FAIL("rails_gate", "an upright phone got rails");
-    PASS("rails_gate");
+// One arrangement everywhere: stock, waste, a gap, then the four foundations
+// across the top of the same seven-column grid the tableau uses. This is what
+// every established Klondike does, and an earlier cut that split them into side
+// rails on a landscape phone read as wrong however good the numbers looked.
+static void test_one_classic_arrangement(void) {
+    const struct { int w, h; const char* name; } screens[] = {
+        { 1170, 2289, "iPhone 12 portrait" },
+        { 2250, 1107, "iPhone 12 landscape" },
+        { 1536, 2048, "tablet portrait" },
+        { 2048, 1536, "tablet landscape" },
+    };
+    for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
+        Layout L = layout_scaled(screens[i].w, screens[i].h);
+        if (L.stock_x != L.tab_x[0]) FAIL("classic", screens[i].name);
+        if (L.waste_x != L.tab_x[1]) FAIL("classic", screens[i].name);
+        for (int f = 0; f < 4; f++)
+            if (L.found_x[f] != L.tab_x[3 + f]) FAIL("classic", screens[i].name);
+        // Everything in the top row shares one baseline, and the tableau starts
+        // a full card below it.
+        if (L.stock_y != L.waste_y) FAIL("classic", screens[i].name);
+        for (int f = 0; f < 4; f++)
+            if (L.found_y[f] != L.stock_y) FAIL("classic", screens[i].name);
+        if (L.tab_y <= L.stock_y + L.card_h) FAIL("classic", screens[i].name);
+    }
+    // Column 2 is the gap between the waste and the foundations, as it has
+    // always been -- that is what makes the row read as two groups.
+    Layout L = layout_scaled(2250, 1107);
+    if (L.found_x[0] <= L.tab_x[2]) FAIL("classic", "no gap before the foundations");
+    PASS("classic");
 }
 
 // A display cutout pushes the title bar (and therefore the whole board) down,
@@ -492,7 +507,7 @@ int main(void) {
     test_scaled_board_scales_with_the_screen();
     test_scaled_board_widens_the_fan_for_fingers();
     test_landscape_uses_the_width();
-    test_rails_only_where_they_pay();
+    test_one_classic_arrangement();
     test_piles_never_overlap();
     test_touch_board_has_no_bottom_bar();
     test_chrome_is_sized_from_the_screen();

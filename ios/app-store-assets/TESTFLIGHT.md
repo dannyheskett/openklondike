@@ -38,7 +38,7 @@ Generate a private key and a certificate signing request locally:
 ```sh
 openssl genrsa -out ios_distribution.key 2048
 openssl req -new -key ios_distribution.key -out ios_distribution.csr \
-  -subj "/emailAddress=dan@danheskett.com/CN=Dan Heskett/C=US"
+  -subj "/emailAddress=dan@danheskett.com/CN=Danny Heskett/C=US"
 ```
 
 developer.apple.com → **Certificates** → **+** → **Apple Distribution**.
@@ -60,8 +60,10 @@ openssl pkcs12 -export \
 ```
 
 Keep `distribution.p12`, the password, and `ios_distribution.key` somewhere
-safe and backed up. Never commit them — `.gitignore` already covers `*.p12`,
-`*.mobileprovision` and `*.p8`, but check before adding anything.
+safe and backed up. Generate them **outside the repo** — `~/apple-signing/` is
+a good home. `.gitignore` covers `*.key`, `*.csr`, `*.cer`, `*.pem`, `*.p12` and
+`*.p8` as a backstop, but the private key should never be inside the working
+tree in the first place.
 
 ## 3. Create the App Store provisioning profile
 

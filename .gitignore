@@ -38,6 +38,11 @@ Thumbs.db
 *.mobileprovision
 *.p8
 *.b64
+# ...and the material the signing certificate is built from.
+*.key
+*.csr
+*.cer
+*.pem
 
 # Tooling scratch
 .playwright-mcp/

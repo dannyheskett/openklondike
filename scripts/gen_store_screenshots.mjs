@@ -46,6 +46,12 @@ const TARGETS = [
   { dir: 'android/play-assets/screenshots/phone', width: 1080, height: 1920 },
   { dir: 'android/play-assets/screenshots/tablet', width: 2160, height: 3840 },
   { dir: 'ios/app-store-assets/screenshots/iphone-6.9', width: 1290, height: 2796 },
+  // Landscape sets. Both stores accept either orientation, but each slot wants
+  // one consistent set -- so these get their own folders and you upload whichever
+  // orientation you want that slot to show.
+  { dir: 'android/play-assets/screenshots/phone-landscape', width: 1920, height: 1080 },
+  { dir: 'android/play-assets/screenshots/tablet-landscape', width: 3840, height: 2160 },
+  { dir: 'ios/app-store-assets/screenshots/iphone-6.9-landscape', width: 2796, height: 1290 },
 ];
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm' };
@@ -93,19 +99,48 @@ async function tap(page, [x, y]) {
   await sleep(200);
 }
 
-// Where the piles are, so the taps below can aim at them. This mirrors the
-// opening lines of layout_portrait() in src/render_portrait.c; it exists only to
-// point a mouse at the right card and nothing in the game reads it. If a tap
-// starts landing on the felt, this is what has drifted.
+// Where the piles are, so the taps below can aim at them. This mirrors
+// layout_portrait() in src/render_portrait.c -- width pass, height pass and gap
+// spread, all three, because in landscape it is the height that drives the card
+// size. It exists only to point a mouse at the right card; nothing in the game
+// reads it. If a tap starts landing on bare felt, this is what has drifted out
+// of step with the C.
 function boardGeometry(w, h) {
   const margin = Math.max(Math.floor(Math.min(w, h) / 28), 6);
-  const cardW = Math.floor(((w - 2 * margin) * 10) / 76);
+  const titleFsOf = (cw) => Math.max(Math.floor((cw * 22) / 80), 10);
+
+  // Width pass: 7 cards plus 6 gaps of a fifth of a card each span the usable width.
+  let cardW = Math.floor(((w - 2 * margin) * 10) / 82);
+
+  // Height pass: three card-heights of playable space in landscape, four in
+  // portrait. This is what shrinks the cards when the short axis binds, and it
+  // is why a landscape mirror cannot skip it.
+  const wantHeights = w > h ? 3 : 4;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const cardH = Math.floor((cardW * 112) / 80);
+    const top = Math.max(2 * titleFsOf(cardW), 1);
+    const statusH = Math.floor((Math.max(Math.floor((cardW * 18) / 80), 9) * 14) / 9);
+    const rowGap = Math.floor((cardW * 28) / 80);
+    const budget = Math.max(h - top - margin - rowGap - statusH, 4);
+    if (wantHeights * cardH > budget) {
+      cardW = Math.floor((Math.floor(budget / wantHeights) * 80) / 112);
+    } else {
+      break;
+    }
+  }
+
   const cardH = Math.floor((cardW * 112) / 80);
-  const gap = Math.max(Math.floor((cardW * 16) / 80), 2);
   const fanDown = Math.max(Math.floor((cardW * 12) / 80), 3);
-  const titleFs = Math.max(Math.floor((cardW * 22) / 80), 10);
-  const topY = 2 * titleFs + margin;
+  const topY = 2 * titleFsOf(cardW) + margin;
   const tabY = topY + cardH + Math.floor((cardW * 28) / 80);
+
+  // Leftover width goes into the gaps, capped at half a card.
+  let gap = Math.max(Math.floor((cardW * 16) / 80), 2);
+  const leftover = w - 2 * margin - 7 * cardW - 6 * gap;
+  if (leftover > 0) {
+    gap += Math.min(Math.floor(leftover / 6), Math.max(Math.floor(cardW / 2) - gap, 0));
+  }
+
   const left = Math.max(Math.floor((w - (7 * cardW + 6 * gap)) / 2), 0);
   const colX = (c) => left + c * (cardW + gap) + cardW / 2;
   return {

@@ -19,6 +19,11 @@ skips the bundle. See [KEYSTORE.md](KEYSTORE.md) for what turns it on.
 | `feature-graphic-1024x500.png` | Feature graphic | 1024×500 PNG/JPG |
 | `screenshots/phone/` | Phone screenshots | 4× 1080×1920 PNG (9:16, promo-eligible) |
 | `screenshots/tablet/` | 7-inch and 10-inch tablet screenshots | 4× 2160×3840 PNG (9:16, same files fit both slots) |
+| `screenshots/phone-landscape/` | Phone screenshots, sideways | 4× 1920×1080 PNG (16:9) |
+| `screenshots/tablet-landscape/` | Tablet screenshots, sideways | 4× 3840×2160 PNG (16:9) |
+
+Play accepts either orientation in a slot; pick one set per slot rather than
+mixing. The game supports both, so either is honest.
 
 ## App name (≤30 chars)
 

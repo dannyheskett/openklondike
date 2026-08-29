@@ -15,6 +15,7 @@ is the step-by-step for turning it on** — no Mac required.
 | --- | --- | --- |
 | `icon-1024.png` | 1024×1024 | **No alpha channel, no transparency, no rounded corners.** Apple masks the corners itself; a submitted icon with an alpha channel is rejected outright. `scripts/gen_icons.py` flattens it to RGB for exactly this reason. |
 | `screenshots/iphone-6.9/` | 1290×2796 | Required. 1–10 images, portrait. Covers every current iPhone; Apple scales this set down for older devices, so no other iPhone size is needed. |
+| `screenshots/iphone-6.9-landscape/` | 2796×1290 | The same four frames with the phone turned sideways. Apple takes either orientation for the slot, but wants **one consistent set** — upload whichever orientation you want the listing to show, not a mixture. |
 
 openklondike ships **iPhone only** (`UIDeviceFamily = [1]` in `ios/Info.plist`),
 so no iPad screenshots are needed. iPads can still install and run it scaled. If

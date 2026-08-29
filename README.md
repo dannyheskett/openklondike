@@ -34,9 +34,19 @@ desktop browser gets the same board as the native app.
   the margins. The window enforces a 704×704 minimum, which is what lets the
   card size stay fixed. A browser window cannot be constrained that way, so on
   web the fixed layout shrinks to fit rather than running off the edge.
-- **Scaled** (touch) — the seven tableau columns are fitted to the live screen
-  width, and every other metric (gaps, fans, bar heights, font sizes) is derived
-  from the resulting card size at the same ratios the fixed layout uses. So the
+- **Scaled** (touch) — the board is fitted to the live screen, and every other
+  metric (gaps, fans, font sizes) is derived from the resulting card size at the
+  same ratios the fixed layout uses. The wordmark bar stays pinned to the top;
+  the score, clock and move count sit in a band directly beneath it rather than
+  in a bar along the bottom, which on a phone lands on the home indicator. It
+  has two arrangements, chosen by aspect ratio:
+  **upright** puts stock, waste and the four foundations in a row above the
+  seven tableau columns; **sideways** (1.6:1 or wider — a phone on its side)
+  moves stock and waste into a rail down the left and the foundations into a
+  2×2 block on the right, so the tableau gets the whole height. On an iPhone 12
+  that is 96% of the width used and 40% more tableau depth. A tablet turned
+  sideways is only ~1.33:1 and keeps the row, which gives it bigger cards than
+  rails would. So the
   two are the same design at different sizes, not two designs. The face-up fan
   is spread wider than the desktop ratio, because a fingertip needs a bigger
   target than the sliver a mouse can hit. It is recomputed from the live screen

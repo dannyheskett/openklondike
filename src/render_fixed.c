@@ -50,10 +50,22 @@ Layout layout_fixed(int view_w, int view_h) {
     int content_w = 7 * L.card_w + 6 * L.col_gap;
     int left = (view_w - content_w) / 2;
     if (left < L.margin_x) left = L.margin_x;
-    for (int c = 0; c < 7; c++) L.col_x[c] = left + c * (L.card_w + L.col_gap);
+    int col_x[7];
+    for (int c = 0; c < 7; c++) col_x[c] = left + c * (L.card_w + L.col_gap);
+    for (int c = 0; c < 7; c++) L.tab_x[c] = col_x[c];
 
-    L.top_y = L.titlebar_h + S(MARGIN_TOP);
-    L.tab_y = L.top_y + L.card_h + S(ROW_GAP);
+    // Top row: stock, waste, a gap, then the four foundations -- the same
+    // arrangement as always, now stated pile by pile instead of as indices into
+    // the tableau's columns.
+    int top_y = L.titlebar_h + S(MARGIN_TOP);
+    L.stock_x = col_x[0]; L.stock_y = top_y;
+    L.waste_x = col_x[1]; L.waste_y = top_y;
+    for (int f = 0; f < 4; f++) { L.found_x[f] = col_x[3 + f]; L.found_y[f] = top_y; }
+
+    L.tab_y      = top_y + L.card_h + S(ROW_GAP);
+    L.tab_bottom = view_h - L.status_h;
+    L.hud_h = 0;   // the desktop board keeps its bottom status bar instead
+    L.hud_y = 0;
     return L;
 #undef S
 }

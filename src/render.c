@@ -428,75 +428,49 @@ static void draw_titlebar(const Layout* L) {
 // The three running numbers. Where they live depends on the board:
 //
 //   desktop   a bar pinned across the bottom, as it always has been
-//   touch     a band directly under the wordmark, laid out like openblocks' and
-//             openrackem's HUD -- label over value, label muted, value picked
-//             out -- because a bar pinned to the bottom of a phone lands on the
-//             home indicator, where it is both cramped and in the way.
+//   touch     one quiet line directly under the wordmark, because a bar pinned
+//             to the bottom of a phone lands on the home indicator, where it is
+//             both cramped and in the way
 //
-// The wordmark bar itself is untouched by this; it stays exactly where it is.
-static void draw_stat_column(const char* label, const char* value,
-                             int x, int y, int fs, int line_h) {
-    gfx_text(label, x, y, fs, TEXT_DIM);
-    gfx_text(value, x, y + line_h, fs, HILITE);
+// Deliberately understated on touch. In solitaire the numbers are incidental --
+// every established implementation keeps them to a footnote of small text, and
+// an earlier cut of this gave them a two-line label-over-value band that shouted
+// over the board. The wordmark bar above is untouched either way.
+static void format_stats(const Game* g, char* out, int n) {
+    int secs = g->timer_frames / SIM_HZ;
+    snprintf(out, n, "SCORE %d     TIME %d:%02d     MOVES %d",
+             g->score, secs / 60, secs % 60, g->moves);
 }
 
-static void format_stats(const Game* g, char* score, char* time, char* moves, int n) {
-    snprintf(score, n, "%d", g->score);
-    snprintf(time,  n, "%d:%02d", g->timer_frames / SIM_HZ / 60,
-                                  (g->timer_frames / SIM_HZ) % 60);
-    snprintf(moves, n, "%d", g->moves);
-}
-
-static void draw_hud_band(const Game* g, const Layout* L) {
-    char score[32], time[32], moves[32];
-    format_stats(g, score, time, moves, 32);
+static void draw_stats_line(const Game* g, const Layout* L) {
+    char buf[96];
+    format_stats(g, buf, sizeof buf);
     int fs = L->status_fs;
-    int line_h = fs + fs / 3;
-
-    // Spread the three columns across the board, which is the width the player
-    // is already reading. Falls back to the full viewport on a board so narrow
-    // the labels would not fit inside it.
-    int board_l = L->tab_x[0];
-    int board_r = L->tab_x[6] + L->card_w;
-    int span = board_r - board_l;
-    int w_score = gfx_measure_text("SCORE", fs);
-    int w_time  = gfx_measure_text("TIME", fs);
-    int w_moves = gfx_measure_text("MOVES", fs);
-    if (w_score + w_time + w_moves + 2 * fs > span) {
-        board_l = L->margin_x;
-        span = L->view_w - 2 * L->margin_x;
-    }
-    int gap = (span - w_score - w_time - w_moves) / 2;
-    if (gap < 0) gap = 0;
-
-    int x = board_l;
-    draw_stat_column("SCORE", score, x, L->hud_y, fs, line_h);
-    x += w_score + gap;
-    draw_stat_column("TIME", time, x, L->hud_y, fs, line_h);
-    x += w_time + gap;
-    draw_stat_column("MOVES", moves, x, L->hud_y, fs, line_h);
+    // Centred over the board, which is what the eye is already tracking.
+    int cx = L->tab_x[0] + (L->tab_x[6] + L->card_w - L->tab_x[0]) / 2;
+    int y  = L->hud_y + (L->hud_h - fs) / 2;
+    gfx_text(buf, cx - gfx_measure_text(buf, fs) / 2, y, fs, TEXT_DIM);
 }
 
 static void draw_status_bar(const Game* g, const Layout* L) {
-    char score[32], time[32], moves[32];
-    format_stats(g, score, time, moves, 32);
     int fs = L->status_fs;
     int y  = L->view_h - L->status_h + (L->status_h - fs) / 2;
+    int secs = g->timer_frames / SIM_HZ;
     gfx_rect(0, L->view_h - L->status_h, L->view_w, L->status_h, FELT_DARK);
     char buf[64];
-    snprintf(buf, sizeof buf, "Score %s", score);
+    snprintf(buf, sizeof buf, "Score %d", g->score);
     gfx_text(buf, L->margin_x, y, fs, TEXT_LIGHT);
-    snprintf(buf, sizeof buf, "Time %s", time);
+    snprintf(buf, sizeof buf, "Time %d:%02d", secs / 60, secs % 60);
     int tw = gfx_measure_text(buf, fs);
     gfx_text(buf, L->view_w / 2 - tw / 2, y, fs, TEXT_LIGHT);
-    snprintf(buf, sizeof buf, "Moves %s", moves);
+    snprintf(buf, sizeof buf, "Moves %d", g->moves);
     tw = gfx_measure_text(buf, fs);
     gfx_text(buf, L->view_w - L->margin_x - tw, y, fs, TEXT_LIGHT);
 }
 
 static void draw_stats(const Game* g, const Layout* L) {
     if (L->status_h > 0) draw_status_bar(g, L);
-    else                 draw_hud_band(g, L);
+    else                 draw_stats_line(g, L);
 }
 
 typedef struct { const Game* g; const DragState* drag; } BoardCtx;

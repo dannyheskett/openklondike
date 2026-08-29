@@ -101,67 +101,48 @@ async function tap(page, [x, y]) {
 
 // Where the piles are, so the taps below can aim at them. This mirrors
 // layout_scaled() in src/render_scaled.c -- width pass, height pass and gap
-// spread, all three, because in landscape it is the height that drives the card
-// size. It exists only to point a mouse at the right card; nothing in the game
+// spread, all three, because sideways it is the height that drives the card size. It exists only to point a mouse at the right card; nothing in the game
 // reads it. If a tap starts landing on bare felt, this is what has drifted out
 // of step with the C.
 function boardGeometry(w, h) {
   const margin = Math.max(Math.floor(Math.min(w, h) / 28), 6);
   const titleFs = Math.max(Math.floor(h / 45), 10);
   const bar = titleFs + Math.floor(titleFs / 2);
-  const hudFs = Math.max(Math.floor(Math.min(w, h) / 38), 9);
-  const hud = 2 * hudFs + Math.floor(hudFs / 3);
+  const statsFs = Math.max(Math.floor(Math.min(w, h) / 46), 9);
+  const statsH = Math.floor((statsFs * 3) / 2);
 
-  const boardY = bar + margin + hud + margin;
+  const boardY = bar + Math.floor(margin / 2) + statsH + margin;
   const availH = Math.max(h - boardY - margin, 8);
   const usableW = w - 2 * margin;
 
-  // 1.6:1 or wider gets the rails arrangement: 10 card columns, tableau full height.
-  const sideways = w * 10 >= h * 16;
-  const cols = sideways ? 10 : 7;
-  let cardW = Math.floor((usableW * 10) / (cols * 10 + (cols - 1) * 2));
-
-  const gapOf = (cw) => Math.max(Math.floor((cw * 16) / 80), 2);
-  if (sideways) {
-    const byHeight = Math.floor((availH * 80) / 112);
-    const byFound = Math.floor(((availH - gapOf(cardW)) / 2) * 80 / 112);
-    cardW = Math.min(cardW, byHeight, byFound);
-  } else {
-    for (let pass = 0; pass < 2; pass += 1) {
-      const cardH = Math.floor((cardW * 112) / 80);
-      const rowGap = Math.floor((cardW * 28) / 80);
-      if (4 * cardH + rowGap <= availH) break;
-      cardW = Math.floor(((availH - rowGap) / 4) * 80 / 112);
-    }
+  let cardW = Math.floor((usableW * 10) / 82);
+  // Tableau depth reserved below the top row: 4 card heights upright, 2.2
+  // sideways, in tenths.
+  const tenths = w > h ? 22 : 40;
+  for (let pass = 0; pass < 2; pass += 1) {
+    const cardH = Math.floor((cardW * 112) / 80);
+    const rowGap = Math.floor((cardW * 28) / 80);
+    if (cardH + Math.floor((cardH * tenths) / 10) + rowGap <= availH) break;
+    cardW = Math.floor((((availH - rowGap) * 10) / (10 + tenths)) * 80 / 112);
   }
   cardW = Math.max(cardW, 24);
   const cardH = Math.floor((cardW * 112) / 80);
 
-  let gap = gapOf(cardW);
-  const leftover = usableW - cols * cardW - (cols - 1) * gap;
+  let gap = Math.max(Math.floor((cardW * 16) / 80), 2);
+  const leftover = usableW - 7 * cardW - 6 * gap;
   if (leftover > 0) {
-    gap += Math.min(Math.floor(leftover / (cols - 1)), Math.max(Math.floor(cardW / 2) - gap, 0));
+    gap += Math.min(Math.floor(leftover / 6), Math.max(Math.floor(cardW / 3) - gap, 0));
   }
-  const content = cols * cardW + (cols - 1) * gap;
+  const content = 7 * cardW + 6 * gap;
   const left = Math.max(Math.floor((w - content) / 2), 0);
   const step = cardW + gap;
   const fanDown = Math.max(Math.floor((cardW * 12) / 80), 3);
+  const tabX = (c) => left + c * step + cardW / 2;
+  const tabY = boardY + cardH + Math.floor((cardW * 28) / 80);
 
-  let stock, waste, tabX, tabY;
-  if (sideways) {
-    stock = [left + cardW / 2, boardY + cardH / 2];
-    waste = [left + cardW / 2, boardY + cardH + gap + cardH / 2];
-    tabX = (c) => left + (c + 1) * step + cardW / 2;
-    tabY = boardY;
-  } else {
-    tabX = (c) => left + c * step + cardW / 2;
-    stock = [tabX(0), boardY + cardH / 2];
-    waste = [tabX(1), boardY + cardH / 2];
-    tabY = boardY + cardH + Math.floor((cardW * 28) / 80);
-  }
   return {
-    stock,
-    waste,
+    stock: [tabX(0), boardY + cardH / 2],
+    waste: [tabX(1), boardY + cardH / 2],
     // Column c holds c + 1 cards, all but the last face down, so its top card
     // sits c face-down fan steps below the start of the tableau.
     column: (c) => [tabX(c), tabY + c * fanDown + cardH / 2],

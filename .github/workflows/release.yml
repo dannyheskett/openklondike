@@ -42,6 +42,16 @@ on:
       - '.editorconfig'
       - 'LICENSE'
       - 'NOTICE'
+      # Store artwork and screenshots are uploaded to Play / App Store Connect by
+      # hand; nothing here is compiled into any build, so changing them should not
+      # burn a release number and push another identical binary to TestFlight.
+      - 'android/play-assets/**'
+      - 'ios/app-store-assets/**'
+      # boto3 for the Device Farm runner, used only by the manual devicefarm
+      # workflow. It ends up in no shipped artifact, so a dependabot bump of it
+      # should not cut a release either. The rest of scripts/ is NOT ignored --
+      # build_raylib_*.sh, embed_ttf.py and gen_font_atlas.c all feed the builds.
+      - 'scripts/requirements.txt'
   workflow_dispatch:
     inputs:
       dry_run:

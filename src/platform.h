@@ -15,26 +15,31 @@
 #endif
 
 // The two board layouts, selected by availability:
-//   OK_PORTRAIT  — the touch layout. The seven tableau columns are fitted to the
+//   OK_SCALED    — the touch layout. The seven tableau columns are fitted to the
 //                  live screen width, so the cards scale; every metric (fans,
 //                  gaps, font sizes) is derived from the resulting card size.
-//   OK_LANDSCAPE — the desktop layout. Cards are a fixed 80x112 and the board is
+//   OK_FIXED — the desktop layout. Cards are a fixed 80x112 and the board is
 //                  centred in the window, exactly as before; only the surrounding
 //                  margins flex. The window enforces a minimum size big enough to
 //                  hold it (see MIN_W/MIN_H), so the fixed size always fits.
-// Native desktop compiles only landscape; Android and iOS only portrait; the web
-// build compiles BOTH and chooses at runtime (desktop browser -> landscape,
-// phone -> portrait), so a laptop browser gets the same look as the native app.
+// Native desktop compiles only the fixed layout; Android and iOS only the scaled
+// one; the web build compiles BOTH and chooses at runtime (desktop browser ->
+// fixed, phone -> scaled), so a laptop browser gets the same look as the native
+// app.
+//
+// These name the BOARD, not the device orientation. The scaled board runs in
+// both orientations on a phone -- see android/AndroidManifest.xml and
+// ios/Info.plist -- and re-fits itself on every rotation.
 #ifdef OK_TOUCH
-#define OK_PORTRAIT 1
+#define OK_SCALED 1
 #endif
 #if !defined(PLATFORM_ANDROID) && !defined(PLATFORM_IOS)
-#define OK_LANDSCAPE 1
+#define OK_FIXED 1
 #endif
 
 // True only on the build that has both layouts and must pick at runtime (web).
-#if defined(OK_PORTRAIT) && defined(OK_LANDSCAPE)
-#define OK_RUNTIME_RENDERER 1
+#if defined(OK_SCALED) && defined(OK_FIXED)
+#define OK_RUNTIME_LAYOUT 1
 #endif
 
 #endif // OPENKLONDIKE_PLATFORM_H

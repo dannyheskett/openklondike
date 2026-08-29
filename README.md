@@ -205,7 +205,7 @@ frame-exact regardless of the live window size.
   rectangle carrying vector suit pips — rounded fills and outlines, circles for
   the club trefoil, raw triangles for the heart/spade/diamond fans.
 - All geometry comes out of a `Layout` (`src/render_internal.h`), computed by
-  `src/render_landscape.c` (fixed) or `src/render_portrait.c` (scaled). Those
+  `src/render_fixed.c` (fixed) or `src/render_scaled.c` (scaled). Those
   two files supply nothing but numbers; every pixel is drawn by the shared code,
   which is what makes the two boards one renderer rather than two to keep in
   sync.

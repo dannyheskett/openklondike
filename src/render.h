@@ -6,16 +6,16 @@
 #include "ok_types.h"
 #include <stdbool.h>
 
-// Desktop card metrics. On the landscape (desktop) layout the cards are exactly
+// Desktop card metrics. On the fixed (desktop) layout the cards are exactly
 // this size and never scale: the board is laid out at a fixed pixel size and
 // centred in the window, and only the surrounding margins flex when resized.
 // The window enforces MIN_W x MIN_H -- just big enough to show the board
 // comfortably -- so the fixed size always fits. Both dimensions are multiples of
 // 16 so the recorder can capture them.
 //
-// The portrait (touch) layout has no fixed card size: it fits the seven columns
+// The scaled (touch) layout has no fixed card size: it fits the seven columns
 // to the live screen width and derives every other metric from the result. See
-// render_portrait.c.
+// render_scaled.c.
 #define CARD_W   80
 #define CARD_H   112
 #define MIN_W    704
@@ -81,10 +81,11 @@ bool render_drop_target(const Game* g, const DragState* drag,
 int render_card_width(void);
 
 // Active layout selection. Native builds have exactly one, so
-// render_use_portrait() is a compile-time constant there (true on Android/iOS,
+// render_use_scaled() is a compile-time constant there (true on Android/iOS,
 // false on desktop). The web build compiles both and picks at runtime:
-// render_set_portrait(true) = touch layout, false = desktop layout.
-void render_set_portrait(bool portrait);
-bool render_use_portrait(void);
+// render_set_scaled(true) = the touch board, false = the fixed desktop board.
+// This is the board, not the device orientation: the scaled board runs in both.
+void render_set_scaled(bool scaled);
+bool render_use_scaled(void);
 
 #endif

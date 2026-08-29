@@ -329,7 +329,7 @@ static void frame_step(void* arg) {
             // tap slop input.c uses to classify the gesture, so the card lifts
             // exactly when the gesture stops being a tap. A mouse never occludes
             // what it is dragging, so this is touch-only.
-            if (render_use_portrait() && c->drag.lift == 0) {
+            if (render_use_scaled() && c->drag.lift == 0) {
                 int cw  = render_card_width();
                 int thr = cw / 6;
                 if (thr < 8) thr = 8;
@@ -452,7 +452,7 @@ int main(int argc, char** argv) {
     // board; fine (desktop / 2-in-1 laptop) -> the fixed desktop board and a
     // mouse, matching the native app. Only pointer:coarse is used -- the
     // maxTouchPoints/ontouchstart backstops wrongly flip touchscreen laptops.
-    render_set_portrait(emscripten_run_script_int(
+    render_set_scaled(emscripten_run_script_int(
         "(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ? 1 : 0"));
 #endif
 

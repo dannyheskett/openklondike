@@ -93,7 +93,7 @@ came out badly on a sideways phone: it caps the card size on whichever axis
 binds, which in landscape is the short one, and then centred seven now-narrow
 columns in a very wide screen. The result used under half the width, and the
 cards came out *smaller* than the same phone gives in portrait. Two changes fix
-it, both in `layout_portrait()`:
+it, both in `layout_scaled()`:
 
 - **Ask for three card-heights of playable space instead of four** when the
   screen is wider than it is tall. Four buys a full tableau column with no fan

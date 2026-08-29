@@ -4,8 +4,8 @@
 // backend the iOS build uses.
 //
 // All geometry comes out of a Layout (render_internal.h), which the two layout
-// translation units compute: render_landscape.c for the fixed-size desktop board
-// and render_portrait.c for the touch board that scales its cards to the screen.
+// translation units compute: render_fixed.c for the fixed-size desktop board
+// and render_scaled.c for the touch board that scales its cards to the screen.
 // Nothing below hardcodes a card size, so the two are the same renderer.
 #include "render_internal.h"
 #include "safe_area.h"
@@ -45,28 +45,28 @@ static const Color TEXT_DIM   = {170, 190, 175, 255};
 // --------------------------------------------------------------------------
 // Layout selection
 // --------------------------------------------------------------------------
-// render_use_portrait() reports the active layout. Native builds have exactly
+// render_use_scaled() reports the active layout. Native builds have exactly
 // one (compile-time constant); the web build has both and picks at runtime.
-#if defined(OK_RUNTIME_RENDERER)
-static bool s_portrait_mode = false;
-void render_set_portrait(bool portrait) { s_portrait_mode = portrait; }
-bool render_use_portrait(void) { return s_portrait_mode; }
-#elif defined(OK_PORTRAIT)
-void render_set_portrait(bool portrait) { (void)portrait; }
-bool render_use_portrait(void) { return true; }   // Android / iOS: touch only
+#if defined(OK_RUNTIME_LAYOUT)
+static bool s_scaled_mode = false;
+void render_set_scaled(bool scaled) { s_scaled_mode = scaled; }
+bool render_use_scaled(void) { return s_scaled_mode; }
+#elif defined(OK_SCALED)
+void render_set_scaled(bool scaled) { (void)scaled; }
+bool render_use_scaled(void) { return true; }   // Android / iOS: touch board only
 #else
-void render_set_portrait(bool portrait) { (void)portrait; }
-bool render_use_portrait(void) { return false; }  // desktop native: fixed only
+void render_set_scaled(bool scaled) { (void)scaled; }
+bool render_use_scaled(void) { return false; }  // desktop native: fixed board only
 #endif
 
 static Layout layout_for(int view_w, int view_h) {
-#if defined(OK_RUNTIME_RENDERER)
-    return s_portrait_mode ? layout_portrait(view_w, view_h)
-                           : layout_landscape(view_w, view_h);
-#elif defined(OK_PORTRAIT)
-    return layout_portrait(view_w, view_h);
+#if defined(OK_RUNTIME_LAYOUT)
+    return s_scaled_mode ? layout_scaled(view_w, view_h)
+                           : layout_fixed(view_w, view_h);
+#elif defined(OK_SCALED)
+    return layout_scaled(view_w, view_h);
 #else
-    return layout_landscape(view_w, view_h);
+    return layout_fixed(view_w, view_h);
 #endif
 }
 
@@ -899,7 +899,7 @@ bool render_bounce_step(int steps) {
         const char* msg = "YOU WIN";
         gfx_text(msg, cx - gfx_measure_text(msg, m.title_fs) / 2,
                  cy - ph / 2 + m.pad, m.title_fs, HILITE);
-        const char* sub = render_use_portrait() ? "Tap to continue" : "Press any key";
+        const char* sub = render_use_scaled() ? "Tap to continue" : "Press any key";
         gfx_text(sub, cx - gfx_measure_text(sub, m.item_fs) / 2,
                  cy - ph / 2 + m.pad * 2 + m.title_fs, m.item_fs, TEXT_DIM);
     }

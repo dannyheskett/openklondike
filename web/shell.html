@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover + no user scaling: a full-bleed, app-like mobile canvas. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>openklondike</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #000;
+               overflow: hidden; overscroll-behavior: none; }
+  /* Lock the page so mobile Safari can't rubber-band scroll the canvas. */
+  body { position: fixed; inset: 0; }
+  #canvas { position: fixed; top: 0; left: 0; display: block; touch-action: none; outline: none; }
+</style>
+</head>
+<body>
+  <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+  <script>
+    // Preserve the WebGL drawing buffer so the game canvas can be captured
+    // (screenshots, screen recording, and headless/automated capture). Without
+    // this, the browser is free to discard the back buffer after compositing,
+    // so a readback taken outside the render loop comes back blank/white. The
+    // cost is negligible for a game this small. Must run before the WASM module
+    // creates its GL context, so we patch getContext up front.
+    (function () {
+      var orig = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+        if (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl') {
+          attrs = attrs || {};
+          if (attrs.preserveDrawingBuffer === undefined) attrs.preserveDrawingBuffer = true;
+        }
+        return orig.call(this, type, attrs);
+      };
+    })();
+
+    // Safari workaround (entirely in Safari's own APIs — raylib is untouched):
+    // raylib's web backend sizes the canvas from window.innerWidth/innerHeight.
+    // On mobile Safari innerHeight is the *large* layout viewport (the area
+    // behind the toolbar), so the bottom of the game (the control buttons) gets
+    // cut off. We shadow innerWidth/innerHeight with the visualViewport size —
+    // the actually-visible area — BEFORE the WASM module loads, so raylib reads
+    // the visible dimensions. Desktop is unaffected (visualViewport == inner*).
+    (function () {
+      var vv = window.visualViewport;
+      if (!vv) return;
+      try {
+        Object.defineProperty(window, 'innerWidth',  { configurable: true, get: function () { return Math.round(vv.width);  } });
+        Object.defineProperty(window, 'innerHeight', { configurable: true, get: function () { return Math.round(vv.height); } });
+      } catch (e) { /* if the browser won't allow it, fall back to native inner* */ }
+    })();
+
+    var Module = { canvas: document.getElementById('canvas') };
+
+    // raylib's GLFW port listens for key events on the canvas, and the canvas is
+    // tabindex="-1", so it does not take focus on its own: until the player
+    // happens to click, the keyboard does nothing at all. Focus it as soon as
+    // the page settles, and take focus back on every pointer contact (a click
+    // inside the game must not leave focus on the document).
+    (function () {
+      var canvas = Module.canvas;
+      var focus = function () { canvas.focus({ preventScroll: true }); };
+      window.addEventListener('load', function () { setTimeout(focus, 0); });
+      canvas.addEventListener('pointerdown', focus);
+      canvas.addEventListener('touchstart', focus, { passive: true });
+      focus();
+    })();
+
+    // raylib re-reads the viewport on the window 'resize' event. iOS Safari's
+    // toolbar show/hide fires visualViewport 'resize'/'scroll' but not always a
+    // window 'resize', so bridge those, and nudge once after load for the
+    // initial fit.
+    (function () {
+      var nudge = function () { window.dispatchEvent(new Event('resize')); };
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', nudge);
+        window.visualViewport.addEventListener('scroll', nudge);
+      }
+      window.addEventListener('orientationchange', function () { setTimeout(nudge, 250); });
+      window.addEventListener('load', function () { setTimeout(nudge, 0); setTimeout(nudge, 400); });
+    })();
+  </script>
+  {{{ SCRIPT }}}
+</body>
+</html>

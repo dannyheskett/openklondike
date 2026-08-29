@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Minimal NativeActivity manifest: the whole game is native C, so there is no
+  application Java/Kotlin code beyond the immersive-mode Activity below. Android
+  loads libopenklondike.so directly via android.app.NativeActivity (the
+  "android.app.lib_name" meta-data names the .so without its "lib" prefix or
+  ".so" suffix). Portrait-locked to match the scaled seven-column board;
+  fullscreen with no title bar.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="com.danheskett.openklondike">
+
+    <!-- versionCode/versionName are intentionally absent: aapt/aapt2
+         - -version-code/- -version-name only inject when the manifest has none,
+         so hardcoding them here would silently pin every Play upload to 1. -->
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
+
+    <uses-feature android:glEsVersion="0x00020000" android:required="true" />
+
+    <application android:label="openklondike"
+                 android:icon="@mipmap/ic_launcher"
+                 android:hasCode="true"
+                 android:allowBackup="false">
+
+        <activity android:name="com.danheskett.openklondike.OpenklondikeActivity"
+                  android:label="openklondike"
+                  android:screenOrientation="portrait"
+                  android:configChanges="orientation|keyboardHidden|screenSize"
+                  android:exported="true"
+                  android:theme="@style/OpenklondikeTheme">
+
+            <!-- Names the native library (libopenklondike.so) NativeActivity loads. -->
+            <meta-data android:name="android.app.lib_name" android:value="openklondike" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

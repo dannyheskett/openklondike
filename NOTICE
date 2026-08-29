@@ -11,6 +11,10 @@ license:
 - minimp4 (MP4 muxer), a single-header public-domain library.
   License: CC0 1.0 Universal. See third_party/minimp4/LICENSE.
 
+- Nunito (UI typeface), by the Nunito Project Authors, bundled and embedded as
+  the application font. License: SIL Open Font License, Version 1.1.
+  See third_party/fonts/nunito/OFL.txt.
+
 openklondike is an original implementation of Klondike solitaire. It is not
 affiliated with, derived from, or endorsed by any other game or its rights
 holders.

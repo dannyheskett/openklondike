@@ -1,13 +1,37 @@
 name: release
 
+# Release pipeline. Auto-picks the next sequential release-N tag, builds every platform,
+# and publishes a GitHub Release with the archives -- desktop (Linux, Windows x64/x86,
+# macOS universal), the Android APK and Play bundle, the iOS .ipa, and the WASM bundle.
+#
 # Inlined, not called. The shared copy in dannyheskett/.github is being retired, so this
 # repository carries its own. The body below is that workflow verbatim, with the edits the
 # shared form existed to avoid needing:
 #   - workflow_call becomes this repo's real push + workflow_dispatch triggers
 #   - the `platforms` input and its per-job gates are gone; a platform this repo does not
-#     build is simply not a job
-#   - `play_publish` and the publish-play job are gone; this repo ships no Android bundle
+#     build is simply not a job, and this repo builds them all
 #   - the `verify_no_pack` input and its guard steps are gone; this repo never set it
+#
+# The tag is created in `publish` AFTER all builds succeed, so a failed build leaves N
+# unused and the next run reuses it. The triggering commit SHA is captured in `prepare` and
+# used everywhere, so a later push to main does not change what gets tagged. A GITHUB_TOKEN
+# tag push starts no workflow, so this never retriggers itself.
+#
+# The store uploads (Play, TestFlight) each gate on their own secrets being present. None
+# are configured yet, so today every one of them reports "skipping" and the release still
+# ships the sideload APK and the unsigned .ipa; adding the secrets is all that turns them
+# on. See android/play-assets/KEYSTORE.md and ios/app-store-assets/README.md.
+#
+# `publish` and its dependents cannot use a plain `needs:` gate, because a skipped job
+# would skip its dependents too. They enumerate the outcomes instead: success and skipped
+# may publish, failure and CANCELLED may not.
+#
+# Cancelled has to be named explicitly. `!cancelled()` asks whether the RUN was cancelled,
+# not whether a dependency was, and a cancelled job's result is neither 'success' nor
+# 'failure' -- so a single build cancelled by a runner shortage or by hand used to satisfy
+# this gate. publish then collected whatever artifacts existed, `files: dist-merged/*`
+# matched them, `fail_on_unmatched_files: true` was satisfied by the survivors, and the
+# release shipped silently missing a platform.
 #
 on:
   push:
@@ -109,9 +133,220 @@ jobs:
           name: mac
           path: dist/*.zip
 
+  build-web:
+    name: web (WASM) build
+    needs: prepare
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Emscripten
+        uses: emscripten-core/setup-emsdk@v16
+      # See game-ci.yml: the web target can transitively need the native Linux build.
+      - name: Install Linux build deps + zip
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libasound2-dev \
+            zip
+      - name: Build raylib (Linux)
+        run: ./scripts/build_raylib_linux.sh
+      - name: Build raylib (web)
+        run: ./scripts/build_raylib_web.sh
+      # RELEASE_VERSION must be passed HERE, not only to dist-web: it can bake a version
+      # header into the wasm. Packaging later with a different value would rezip a binary
+      # carrying the wrong version.
+      - name: Build WASM
+        run: make web RELEASE_VERSION=${{ needs.prepare.outputs.version }}
+      - name: Package WASM bundle
+        run: make dist-web RELEASE_VERSION=${{ needs.prepare.outputs.version }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web
+          path: dist/*.zip
+
+  build-ios:
+    name: iOS device .ipa build
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      # Apple rejects uploads built against an older SDK ("This app was built
+      # with the iOS 17.5 SDK. All iOS and iPadOS apps must be built with the
+      # iOS 26 SDK or later"). Fail here, with a clear message, rather than
+      # after a full build at Apple's validator.
+      - name: Check the iOS SDK is new enough for the App Store
+        run: |
+          set -eux
+          xcodebuild -version
+          sdk=$(xcrun --sdk iphoneos --show-sdk-version)
+          echo "iphoneos SDK: $sdk"
+          if [ "${sdk%%.*}" -lt 26 ]; then
+            echo "::error::iOS SDK $sdk is too old; the App Store requires 26+. Update the runner image or select a newer Xcode."
+            exit 1
+          fi
+      # Signing config never fails the release: without the Apple secrets the
+      # build still produces the unsigned .ipa that AWS Device Farm re-signs.
+      - name: Detect iOS signing secrets
+        id: iossecret
+        env:
+          C: ${{ secrets.IOS_CERT_P12 }}
+          P: ${{ secrets.IOS_CERT_PASSWORD }}
+          M: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          T: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          if [ -n "$C" ] && [ -n "$P" ] && [ -n "$M" ] && [ -n "$T" ]; then
+            echo "present=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Unsigned arm64 device .ipa. AWS Device Farm re-signs it on upload, so no Apple
+      # Developer account is needed to test on a real device.
+      - name: Package iOS .ipa (unsigned)
+        if: steps.iossecret.outputs.present == 'false'
+        run: make dist-ios RELEASE_VERSION=${{ needs.prepare.outputs.version }}
+      # App Store-submittable .ipa: distribution cert in a throwaway keychain,
+      # App Store provisioning profile embedded, entitlements generated by the
+      # Makefile. The keychain dies with the runner.
+      - name: Package iOS .ipa (App Store signed)
+        if: steps.iossecret.outputs.present == 'true'
+        env:
+          IOS_CERT_P12:             ${{ secrets.IOS_CERT_P12 }}
+          IOS_CERT_PASSWORD:        ${{ secrets.IOS_CERT_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          IOS_TEAM_ID:              ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/openklondike-signing.keychain-db"
+          KEYCHAIN_PASS="$(uuidgen)"
+          echo "$IOS_CERT_P12"             | base64 -d > "$RUNNER_TEMP/dist.p12"
+          echo "$IOS_PROVISIONING_PROFILE" | base64 -d > "$RUNNER_TEMP/profile.mobileprovision"
+
+          security create-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASS" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/dist.p12" -k "$KEYCHAIN" \
+            -P "$IOS_CERT_PASSWORD" -T /usr/bin/codesign -f pkcs12
+          # Without this, codesign blocks on an interactive keychain prompt.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASS" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" \
+            | awk -F'"' '/Apple Distribution/ {print $2; exit}')
+          if [ -z "$IDENTITY" ]; then
+            echo "no Apple Distribution identity found in the keychain" >&2
+            security find-identity -v -p codesigning "$KEYCHAIN" >&2
+            exit 1
+          fi
+          echo "signing as: $IDENTITY"
+
+          make dist-ios \
+            RELEASE_VERSION=${{ needs.prepare.outputs.version }} \
+            IOS_SIGN_IDENTITY="$IDENTITY" \
+            IOS_PROFILE="$RUNNER_TEMP/profile.mobileprovision" \
+            IOS_TEAM_ID="$IOS_TEAM_ID"
+      - name: Verify the .ipa is signed and App Store-shaped
+        if: steps.iossecret.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          app="build/ios-device/Payload/Openklondike.app"
+          codesign --verify --strict --verbose=2 "$app"
+          echo "--- entitlements ---"
+          codesign -d --entitlements :- "$app"
+          test -f "$app/embedded.mobileprovision" || { echo "no embedded profile" >&2; exit 1; }
+          test -f "$app/Assets.car"               || { echo "no compiled app icon" >&2; exit 1; }
+          # Top-level CFBundleIconName, not just the nested one actool writes:
+          # missing it fails the upload with ITMS-90713.
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName' "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion'  "$app/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :ITSAppUsesNonExemptEncryption' "$app/Info.plist"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios
+          path: dist/*.ipa
+
+  build-android:
+    name: android APK (sideload) + AAB (Play) build
+    needs: prepare
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    env:
+      NDK_VERSION: "26.3.11579264"
+      ANDROID_BUILD_TOOLS: "35.0.0"
+      ANDROID_PLATFORM_VER: "35"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install NDK + build-tools + platform
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platforms;android-${ANDROID_PLATFORM_VER}"
+          echo "ANDROID_NDK=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - name: Build raylib (Android, arm64-v8a)
+        run: ./scripts/build_raylib_android.sh
+      - name: Package sideload APK (debug-signed)
+        run: |
+          make dist-android \
+            ANDROID_BUILD_TOOLS="${ANDROID_BUILD_TOOLS}" \
+            ANDROID_PLATFORM_VER="${ANDROID_PLATFORM_VER}" \
+            RELEASE_VERSION=${{ needs.prepare.outputs.version }}
+      # secrets can't be referenced in `if:`, so probe once into an output. All FOUR signing
+      # secrets must be present -- the alias and both passwords, not just the keystore. If
+      # any is missing the AAB is skipped and the sideload APK still ships, so an incomplete
+      # Play config never fails the release.
+      - name: Detect Play signing secrets
+        id: playsecret
+        env:
+          K:  ${{ secrets.PLAY_UPLOAD_KEYSTORE }}
+          A:  ${{ secrets.PLAY_KEY_ALIAS }}
+          SP: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
+          KP: ${{ secrets.PLAY_KEY_PASSWORD }}
+        run: |
+          if [ -n "$K" ] && [ -n "$A" ] && [ -n "$SP" ] && [ -n "$KP" ]; then
+            echo "present=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Package Play bundle (AAB, upload-signed)
+        if: steps.playsecret.outputs.present == 'true'
+        env:
+          PLAY_UPLOAD_KEYSTORE:    ${{ secrets.PLAY_UPLOAD_KEYSTORE }}
+          PLAY_KEY_ALIAS:          ${{ secrets.PLAY_KEY_ALIAS }}
+          PLAY_KEYSTORE_PASSWORD:  ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
+          PLAY_KEY_PASSWORD:       ${{ secrets.PLAY_KEY_PASSWORD }}
+        run: |
+          echo "$PLAY_UPLOAD_KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          make dist-android-play \
+            ANDROID_BUILD_TOOLS="${ANDROID_BUILD_TOOLS}" \
+            ANDROID_PLATFORM_VER="${ANDROID_PLATFORM_VER}" \
+            RELEASE_VERSION=${{ needs.prepare.outputs.version }} \
+            PLAY_KEYSTORE="$RUNNER_TEMP/upload.jks" \
+            PLAY_KEY_ALIAS="$PLAY_KEY_ALIAS" \
+            PLAY_STORE_PASS="$PLAY_KEYSTORE_PASSWORD" \
+            PLAY_KEY_PASS="$PLAY_KEY_PASSWORD"
+      # The AAB is only built and uploaded as an artifact here. The push to Play happens in
+      # publish-play, which waits for EVERY platform build first: a build failing in
+      # parallel with this one could otherwise land on Play after the release had broken.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android
+          path: |
+            dist/*.apk
+            dist/*.aab
+
   publish:
     name: tag + publish GitHub Release
-    needs: [prepare, build-linux-windows, build-mac]
+    needs: [prepare, build-linux-windows, build-mac, build-web, build-ios, build-android]
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && needs.prepare.result == 'success' }}
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -151,3 +386,168 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           draft: false
+
+  publish-play:
+    # Gated on `publish`, not merely on the builds. The comment on the AAB upload step
+    # above reasons that publish-play "waits for EVERY platform build first" -- true, but
+    # the GitHub Release is not a platform build. `publish` was absent from needs:, so
+    # needs.*.result never included it and the two ran in parallel: a refused tag push or
+    # a failed action-gh-release left publish red while this job shipped an AAB labelled
+    # release-N for a release that does not exist.
+    #
+    # The !cancelled()/!contains(...) apparatus is now redundant -- publish carries it,
+    # and its result == 'success' cannot be satisfied by a skipped or cancelled job.
+    #
+    # `!inputs.dry_run` is load-bearing here, not decorative: this repo publishes to
+    # Play, so without it a dry run would still ship an AAB to the internal track --
+    # the exact outcome dry_run exists to prevent. On a push, `inputs` is empty and
+    # the expression is falsey, which is why it is safe at job level.
+    if: ${{ !inputs.dry_run && needs.publish.result == 'success' }}
+    name: publish AAB to the Play internal track
+    needs: [prepare, publish]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Download the android artifact (contains the AAB)
+        uses: actions/download-artifact@v8
+        with:
+          name: android
+          path: dist
+      - name: Gate on the publish secret + a built AAB
+        id: gate
+        env:
+          SA: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          aab=$(find dist -maxdepth 1 -name '*.aab' | head -1)
+          if [ -n "$SA" ] && [ -n "$aab" ]; then
+            echo "go=true"   >> "$GITHUB_OUTPUT"
+            echo "aab=$aab"  >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false"  >> "$GITHUB_OUTPUT"
+            echo "Skipping Play publish (secret: $([ -n "$SA" ] && echo yes || echo no); AAB: $([ -n "$aab" ] && echo yes || echo no))."
+          fi
+      # Pinned to the v1.1.5 commit SHA (not the mutable tag) so a retagged upstream release
+      # cannot silently change what runs against the signing key.
+      - name: Publish AAB to the Play internal track
+        if: steps.gate.outputs.go == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5  # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.danheskett.${{ github.event.repository.name }}
+          releaseFiles: ${{ steps.gate.outputs.aab }}
+          track: internal
+          status: completed
+          releaseName: release-${{ needs.prepare.outputs.version }}
+
+  # ---------------------------------------------------------------------------
+  # Upload the signed .ipa to App Store Connect, so it shows up under TestFlight
+  # and can be picked for App Store review. Runs on macOS because altool ships
+  # with Xcode; there is no Linux or Windows equivalent, which is precisely why
+  # this is automated -- the maintainer has no Mac.
+  #
+  # `!inputs.dry_run` is load-bearing for the same reason as the Play job: a dry
+  # run must not put a build in front of Apple.
+  # ---------------------------------------------------------------------------
+  publish-testflight:
+    if: ${{ !inputs.dry_run && needs.publish.result == 'success' }}
+    name: upload .ipa to App Store Connect
+    needs: [prepare, publish]
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Download the ios artifact (contains the .ipa)
+        uses: actions/download-artifact@v8
+        with:
+          name: ios
+          path: dist
+      - name: Gate on the API-key secrets + a signed .ipa
+        id: gate
+        env:
+          K: ${{ secrets.ASC_KEY_P8 }}
+          I: ${{ secrets.ASC_KEY_ID }}
+          S: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          ipa=$(find dist -maxdepth 1 -name '*.ipa' | head -1)
+          signed=false
+          if [ -n "$ipa" ] && unzip -l "$ipa" | grep -q '_CodeSignature'; then signed=true; fi
+          if [ -n "$K" ] && [ -n "$I" ] && [ -n "$S" ] && [ "$signed" = true ]; then
+            echo "go=true"  >> "$GITHUB_OUTPUT"
+            echo "ipa=$ipa" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping App Store upload (key: $([ -n "$K" ] && echo yes || echo no); signed .ipa: $signed)."
+          fi
+      # altool finds the key by convention: AuthKey_<KeyID>.p8 in ~/.appstoreconnect/private_keys.
+      - name: Install the App Store Connect API key
+        if: steps.gate.outputs.go == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "$ASC_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+      # Validate first: it catches ITMS-* rejections (bad icon, duplicate build
+      # number, missing plist keys) without burning the build number, and its
+      # error messages are far better than the ones the upload path emits.
+      - name: Validate the .ipa against App Store rules
+        if: steps.gate.outputs.go == 'true'
+        env:
+          ASC_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --validate-app -f "${{ steps.gate.outputs.ipa }}" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+      - name: Upload the .ipa to App Store Connect
+        if: steps.gate.outputs.go == 'true'
+        env:
+          ASC_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          xcrun altool --upload-app -f "${{ steps.gate.outputs.ipa }}" -t ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          echo "Uploaded build ${{ needs.prepare.outputs.version }}. Apple processing takes ~5-15 min before it appears in TestFlight."
+      - name: Remove the API key
+        if: always()
+        run: rm -rf ~/.appstoreconnect/private_keys
+
+  # ---------------------------------------------------------------------------
+  # Attach "What to Test" notes to the build that was just uploaded.
+  #
+  # Distribution needs no help -- the internal beta group has
+  # hasAccessToAllBuilds and builds default to autoNotifyEnabled, so testers get
+  # every upload automatically. Apple just never fills in the note explaining
+  # what changed, which is what this does.
+  #
+  # Runs on Linux (pure REST, no Xcode) so polling through Apple's 5-15 minute
+  # processing window costs ordinary runner minutes rather than macOS ones.
+  # ---------------------------------------------------------------------------
+  testflight-notes:
+    if: ${{ !inputs.dry_run && needs.publish-testflight.result == 'success' }}
+    name: attach TestFlight release notes
+    needs: [prepare, publish-testflight]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Gate on the API-key secrets
+        id: gate
+        env:
+          K: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ -n "$K" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; else echo "go=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Attach notes and report tester distribution
+        if: steps.gate.outputs.go == 'true'
+        env:
+          ASC_KEY_P8:    ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUNDLE_ID:     com.danheskett.${{ github.event.repository.name }}
+          BUILD_VERSION: ${{ needs.prepare.outputs.version }}
+          NOTES: |
+            release-${{ needs.prepare.outputs.version }}
+
+            ${{ github.event.head_commit.message }}
+        run: |
+          python3 -m pip install --quiet cryptography
+          python3 scripts/testflight_notes.py

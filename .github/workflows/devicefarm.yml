@@ -1,0 +1,136 @@
+name: devicefarm
+
+# Manually-triggered real-device smoke test. Builds the app and runs an AWS Device Farm
+# Fuzz test on real hardware to confirm the game launches and runs without crashing.
+# Manual-only so device minutes are spent deliberately. Auth is via GitHub OIDC, no stored
+# AWS keys. Callers pass the inputs straight through from their workflow_dispatch.
+
+# Inlined, not called. The shared copy in dannyheskett/.github is being retired, so this
+# repository carries its own. The body below is that workflow verbatim, with two edits:
+# the trigger is workflow_dispatch with the real input types, instead of workflow_call
+# taking them as strings from a thin caller that just forwarded them; and the `simstats`
+# high-refresh sim-rate check is gone. That check needs a build that plays itself, which a
+# solitaire game has no way to do without a solver -- openklondike keeps its 60 Hz
+# simulation honest with the unit tests over src/tick.c instead (tests/test_game.c).
+# scripts/devicefarm_run.py is carried verbatim, so its SIMSTATS branch is still there;
+# it is opt-in via DEVICEFARM_CHECK_SIMSTATS, which this workflow never sets.
+#
+# Requires the AWS_ROLE_ARN and DEVICEFARM_PROJECT_ARN secrets. Neither is configured yet,
+# so this workflow is here and ready rather than in use.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Which platform(s) to device-test"
+        type: choice
+        options: [both, android, ios]
+        default: both
+      max_devices:
+        description: "Number of real devices to fuzz-test on (per platform)"
+        default: "1"
+      device_model:
+        description: "Device MODEL filter, e.g. 'Galaxy S23'"
+        default: ""
+permissions:
+  id-token: write   # mint the OIDC token to assume the AWS role
+  contents: read
+
+jobs:
+  android:
+    name: build APK + Device Farm fuzz (Android)
+    if: inputs.platform == 'android' || inputs.platform == 'both'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      NDK_VERSION: "26.3.11579264"
+      ANDROID_BUILD_TOOLS: "35.0.0"
+      ANDROID_PLATFORM_VER: "35"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+      - name: Install NDK + build-tools + platform
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platforms;android-${ANDROID_PLATFORM_VER}"
+          echo "ANDROID_NDK=${ANDROID_SDK_ROOT}/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+      - name: Build raylib (Android, arm64-v8a static)
+        run: ./scripts/build_raylib_android.sh
+      - name: Build APK
+        run: |
+          make android \
+            ANDROID_BUILD_TOOLS="${ANDROID_BUILD_TOOLS}" \
+            ANDROID_PLATFORM_VER="${ANDROID_PLATFORM_VER}"
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Device Farm fuzz test
+        env:
+          DEVICEFARM_PROJECT_ARN: ${{ secrets.DEVICEFARM_PROJECT_ARN }}
+          APP_PATH: build/${{ github.event.repository.name }}.apk
+          DEVICEFARM_MAX_DEVICES: ${{ inputs.max_devices }}
+          DEVICEFARM_ARTIFACT_DIR: devicefarm-artifacts
+          DEVICEFARM_DEVICE_MODEL: ${{ inputs.device_model }}
+        run: |
+          # venv: macOS runners' Homebrew python rejects bare pip installs (PEP 668)
+          python3 -m venv "$RUNNER_TEMP/df-venv"
+          # Pinned in the caller's scripts/requirements.txt rather than installed
+          # floating, so the version that talks to Device Farm under an assumed AWS
+          # role is a decision rather than whatever PyPI served that morning -- and so
+          # dependabot has a file it can actually see and bump.
+          "$RUNNER_TEMP/df-venv/bin/pip" install --quiet --disable-pip-version-check \
+            -r scripts/requirements.txt
+          "$RUNNER_TEMP/df-venv/bin/python" scripts/devicefarm_run.py
+      - name: Upload Device Farm screenshots/video
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: devicefarm-media-android
+          path: devicefarm-artifacts
+          if-no-files-found: ignore
+
+  ios:
+    name: build .ipa + Device Farm fuzz (iOS)
+    if: inputs.platform == 'ios' || inputs.platform == 'both'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build device .ipa (unsigned — Device Farm re-signs on upload)
+        run: make ios
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Device Farm fuzz test
+        env:
+          DEVICEFARM_PROJECT_ARN: ${{ secrets.DEVICEFARM_PROJECT_ARN }}
+          APP_PATH: build/${{ github.event.repository.name }}.ipa
+          DEVICEFARM_MAX_DEVICES: ${{ inputs.max_devices }}
+          DEVICEFARM_ARTIFACT_DIR: devicefarm-artifacts
+          DEVICEFARM_DEVICE_MODEL: ${{ inputs.device_model }}
+        run: |
+          # venv: macOS runners' Homebrew python rejects bare pip installs (PEP 668)
+          python3 -m venv "$RUNNER_TEMP/df-venv"
+          # Pinned in the caller's scripts/requirements.txt rather than installed
+          # floating, so the version that talks to Device Farm under an assumed AWS
+          # role is a decision rather than whatever PyPI served that morning -- and so
+          # dependabot has a file it can actually see and bump.
+          "$RUNNER_TEMP/df-venv/bin/pip" install --quiet --disable-pip-version-check \
+            -r scripts/requirements.txt
+          "$RUNNER_TEMP/df-venv/bin/python" scripts/devicefarm_run.py
+      - name: Upload Device Farm screenshots/video
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: devicefarm-media-ios
+          path: devicefarm-artifacts
+          if-no-files-found: ignore

@@ -1,7 +1,9 @@
-// Unit tests for openklondike's game logic — no raylib, no window. game.c is
-// included directly so its file-static helpers are visible to the tests.
+// Unit tests for openklondike's game logic and its fixed-timestep clock — no
+// raylib, no window. The sources are included directly so their file-static
+// helpers are visible to the tests.
 // Built and run by `make test`; a non-zero exit means a failure.
 #include "../src/game.c"
+#include "../src/tick.c"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -218,6 +220,69 @@ static void test_auto_move(void) {
     PASS("auto_move");
 }
 
+
+// --------------------------------------------------------------------------
+// The fixed-timestep clock. The play timer and its -2/10s penalty are counted
+// in simulation steps, so the clock is what keeps a game on a 120 Hz phone
+// running at the same wall speed as one on a 60 Hz desktop.
+// --------------------------------------------------------------------------
+static void test_sim_clock(void) {
+    SimClock c;
+    sim_clock_reset(&c);
+
+    // A 60 Hz display: exactly one step per frame.
+    for (int i = 0; i < 10; i++)
+        if (sim_clock_advance(&c, SIM_DT) != 1) FAIL("sim_clock", "60Hz frame != 1 step");
+
+    // A 120 Hz display: one step every other frame, so still 60 steps a second.
+    sim_clock_reset(&c);
+    int steps = 0;
+    for (int i = 0; i < 120; i++) steps += sim_clock_advance(&c, SIM_DT / 2.0);
+    if (steps != 60) FAIL("sim_clock", "120Hz second did not run 60 steps");
+
+    // A 30 Hz display: two steps a frame, again 60 a second.
+    sim_clock_reset(&c);
+    steps = 0;
+    for (int i = 0; i < 30; i++) steps += sim_clock_advance(&c, SIM_DT * 2.0);
+    if (steps != 60) FAIL("sim_clock", "30Hz second did not run 60 steps");
+
+    // A long stall (a backgrounded tab) skips ahead rather than spiralling.
+    sim_clock_reset(&c);
+    if (sim_clock_advance(&c, 30.0) != SIM_MAX_STEPS)
+        FAIL("sim_clock", "a long stall should clamp to SIM_MAX_STEPS");
+    if (sim_clock_advance(&c, 0.0) != 0)
+        FAIL("sim_clock", "the backlog should have been dropped, not banked");
+
+    // A stalled or backward clock contributes nothing.
+    sim_clock_reset(&c);
+    if (sim_clock_advance(&c, -1.0) != 0) FAIL("sim_clock", "a backward dt ran steps");
+    PASS("sim_clock");
+}
+
+// The timer and the timed scoring penalty are driven by those steps, so a
+// second of play costs the same on every platform.
+static void test_timed_scoring(void) {
+    Game g = {0};
+    g.phase = PHASE_PLAY;
+    g.score = 100;
+
+    for (int i = 0; i < TICKS_PER_TIME_STEP - 1; i++) game_tick(&g);
+    if (g.score != 100) FAIL("timed_scoring", "penalty applied before 10s");
+    game_tick(&g);
+    if (g.score != 98) FAIL("timed_scoring", "no -2 penalty at 10s");
+    for (int i = 0; i < TICKS_PER_TIME_STEP; i++) game_tick(&g);
+    if (g.score != 96) FAIL("timed_scoring", "no second -2 penalty at 20s");
+    if (g.timer_frames != 2 * TICKS_PER_TIME_STEP)
+        FAIL("timed_scoring", "timer did not count one frame per tick");
+
+    // A won game freezes the clock.
+    g.phase = PHASE_WON;
+    int frozen = g.timer_frames;
+    for (int i = 0; i < 100; i++) game_tick(&g);
+    if (g.timer_frames != frozen) FAIL("timed_scoring", "clock ran after the win");
+    PASS("timed_scoring");
+}
+
 int main(void) {
     test_deal();
     test_tableau_moves();
@@ -227,6 +292,8 @@ int main(void) {
     test_stock();
     test_auto_move();
     test_win();
+    test_sim_clock();
+    test_timed_scoring();
     printf("\nAll tests passed.\n");
     return 0;
 }

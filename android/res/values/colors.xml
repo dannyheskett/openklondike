@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive-icon background: the game's card-table green. -->
+    <color name="ic_launcher_background">#0C5C34</color>
+</resources>

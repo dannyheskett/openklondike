@@ -32,24 +32,33 @@ typedef struct {
     int view_w, view_h;   // viewport this layout was computed for
     int card_w, card_h;
     int col_gap;          // horizontal gap between columns
-    int col_x[7];         // x of each column / top-row slot
-    int top_y;            // y of the top row (stock / waste / foundations)
+
+    // Pile positions, given explicitly rather than as indices into one row of
+    // columns. The fixed and portrait boards put stock, waste and the four
+    // foundations in a row above the tableau; the landscape board puts stock and
+    // waste in a rail down the left and the foundations in a 2x2 block on the
+    // right, so the tableau gets the whole height. Both are just different fills
+    // of these fields, and every consumer -- drawing, hit testing, drop
+    // targeting -- reads them without caring which arrangement produced them.
+    int stock_x,  stock_y;
+    int waste_x,  waste_y;
+    int found_x[4], found_y[4];
+    int tab_x[7];         // x of each tableau column
     int tab_y;            // y where the tableau fans begin
+    int tab_bottom;       // y the tableau must not grow past
+
     int fan_up;           // vertical overlap between face-up tableau cards
     int fan_down;         // tighter overlap for face-down cards
     int waste_fan;        // horizontal spread of the three drawn waste cards
-    int titlebar_h;       // top bar carrying the game name
-    int status_h;         // bottom bar carrying score / time / moves
-    int margin_x;         // side margin used by the status bar text
-    int title_fs;         // wordmark font size
-    int status_fs;        // status bar font size
-} Layout;
 
-// Top-row slot indices map onto tableau columns:
-//   col 0 = stock, col 1 = waste, col 2 = gap, cols 3..6 = foundations 0..3.
-#define SLOT_STOCK   0
-#define SLOT_WASTE   1
-#define SLOT_FOUND0  3
+    int titlebar_h;       // top bar carrying the wordmark
+    int hud_h;            // stats band under it (0 on the fixed desktop board)
+    int hud_y;            // top of that band
+    int status_h;         // bottom bar carrying score/time/moves (fixed board only)
+    int margin_x;         // side margin
+    int title_fs;         // wordmark font size
+    int status_fs;        // stats font size
+} Layout;
 
 // Board colours (defined in render.c), shared with the layout files.
 extern const Color FELT;

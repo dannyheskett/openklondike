@@ -67,7 +67,7 @@ static void use_screen(int w, int h, bool scaled) {
 }
 
 // The board's right edge: the last column plus a card.
-static int board_right(const Layout* L) { return L->col_x[6] + L->card_w; }
+static int board_right(const Layout* L) { return L->tab_x[6] + L->card_w; }
 
 // A column's bottom, at the natural (uncompressed) fan.
 static int natural_bottom(const Layout* L, int face_down, int face_up) {
@@ -87,7 +87,7 @@ static void test_fixed_board_never_scales(void) {
         FAIL("fixed_board", "gap/fan metrics drifted");
     if (L.titlebar_h != 44 || L.status_h != 28)
         FAIL("fixed_board", "bar heights drifted");
-    if (L.col_x[0] != 24)
+    if (L.tab_x[0] != 24)
         FAIL("fixed_board", "the board is not flush against the 24px margin");
     if (board_right(&L) != MIN_W - 24)
         FAIL("fixed_board", "the board does not span the minimum width");
@@ -96,8 +96,8 @@ static void test_fixed_board_never_scales(void) {
     Layout W = layout_fixed(1600, 1000);
     if (W.card_w != CARD_W || W.card_h != CARD_H)
         FAIL("fixed_board", "cards scaled up in a large window");
-    int content = board_right(&W) - W.col_x[0];
-    if (W.col_x[0] != (1600 - content) / 2)
+    int content = board_right(&W) - W.tab_x[0];
+    if (W.tab_x[0] != (1600 - content) / 2)
         FAIL("fixed_board", "the board is not centred");
     PASS("fixed_board");
 }
@@ -138,15 +138,15 @@ static void test_scaled_board_fits_every_screen(void) {
         if (L.card_w <= 0 || L.card_h <= 0) FAIL("scaled_fits", screens[i].name);
         // Inside the viewport, and inside its margins: a board that merely
         // "fits" by running edge to edge has silently eaten them.
-        if (L.col_x[0] < L.margin_x || board_right(&L) > w - L.margin_x)
+        if (L.tab_x[0] < 0 || board_right(&L) > w)
             FAIL("scaled_fits", screens[i].name);
         // The top row must clear the title bar and leave the status bar alone.
-        if (L.top_y < L.titlebar_h) FAIL("scaled_fits", screens[i].name);
-        if (L.tab_y + L.card_h > h - L.status_h)
+        if (L.stock_y < L.titlebar_h) FAIL("scaled_fits", screens[i].name);
+        if (L.tab_y + L.card_h > L.tab_bottom)
             FAIL("scaled_fits", screens[i].name);
         // A typical opening column (six face-down under one face-up) fits
         // without needing the draw-time fan compression.
-        if (natural_bottom(&L, 6, 1) > h - L.status_h)
+        if (natural_bottom(&L, 6, 1) > L.tab_bottom)
             FAIL("scaled_fits", screens[i].name);
         // The gaps must stay positive, or columns would touch.
         if (L.col_gap <= 0 || L.fan_up <= 0 || L.fan_down <= 0)
@@ -188,7 +188,7 @@ static void test_scaled_board_widens_the_fan_for_fingers(void) {
             FAIL("scaled_fan", "the touch fan spread past two fifths of a card");
         // The deepest possible column -- six face-down under a full thirteen-card
         // run -- may need the draw-time compression, but a busy one must not.
-        if (natural_bottom(&L, 3, 6) > screens[i].h - L.status_h)
+        if (natural_bottom(&L, 3, 6) > L.tab_bottom)
             FAIL("scaled_fan", "a busy column no longer fits at the wider fan");
     }
     PASS("scaled_fan");
@@ -208,7 +208,7 @@ static void test_landscape_uses_the_width(void) {
     for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
         Layout L = layout_scaled(screens[i].w, screens[i].h);
         int usable  = screens[i].w - 2 * L.margin_x;
-        int content = board_right(&L) - L.col_x[0];
+        int content = board_right(&L) - L.tab_x[0];
         if (content * 10 < usable * 6)
             FAIL("landscape_width", "the board uses under 60% of the usable width");
         if (content > usable)
@@ -223,6 +223,98 @@ static void test_landscape_uses_the_width(void) {
     PASS("landscape_width");
 }
 
+// No two piles may occupy the same pixels. This is the invariant the rails
+// arrangement could most easily break -- ten columns of piles placed by hand,
+// where the old single row of seven could not overlap by construction.
+static bool overlaps(int ax, int ay, int bx, int by, int w, int h) {
+    return ax < bx + w && bx < ax + w && ay < by + h && by < ay + h;
+}
+
+static void test_piles_never_overlap(void) {
+    const struct { int w, h; const char* name; } screens[] = {
+        { 1170, 2289, "iPhone 12 portrait" },
+        { 2250, 1107, "iPhone 12 landscape" },
+        { 1080, 2400, "phone portrait" },
+        { 2400, 1080, "phone landscape" },
+        { 1536, 2048, "tablet portrait" },
+        { 2048, 1536, "tablet landscape" },
+        {  320,  480, "smallest sane screen" },
+    };
+    for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
+        Layout L = layout_scaled(screens[i].w, screens[i].h);
+        int xs[13], ys[13], n = 0;
+        xs[n] = L.stock_x; ys[n++] = L.stock_y;
+        xs[n] = L.waste_x; ys[n++] = L.waste_y;
+        for (int f = 0; f < 4; f++) { xs[n] = L.found_x[f]; ys[n++] = L.found_y[f]; }
+        for (int c = 0; c < 7; c++) { xs[n] = L.tab_x[c];   ys[n++] = L.tab_y; }
+        for (int a = 0; a < n; a++) {
+            // Every pile must sit inside the viewport and below the HUD band.
+            if (xs[a] < 0 || xs[a] + L.card_w > screens[i].w)
+                FAIL("no_overlap", screens[i].name);
+            if (ys[a] < L.hud_y + L.hud_h) FAIL("no_overlap", screens[i].name);
+            if (ys[a] + L.card_h > L.tab_bottom) FAIL("no_overlap", screens[i].name);
+            for (int b = a + 1; b < n; b++)
+                if (overlaps(xs[a], ys[a], xs[b], ys[b], L.card_w, L.card_h))
+                    FAIL("no_overlap", screens[i].name);
+        }
+    }
+    PASS("no_overlap");
+}
+
+// The touch board has no bottom bar -- on a phone that lands on the home
+// indicator, cramped and in the way -- and puts the stats in a band under the
+// wordmark instead. The desktop board keeps its bottom bar.
+static void test_touch_board_has_no_bottom_bar(void) {
+    Layout t = layout_scaled(1170, 2289);
+    if (t.status_h != 0)  FAIL("no_bottom_bar", "the touch board still reserves a bottom bar");
+    if (t.hud_h <= 0)     FAIL("no_bottom_bar", "the touch board has no stats band");
+    if (t.hud_y < t.titlebar_h)
+        FAIL("no_bottom_bar", "the stats band overlaps the wordmark bar");
+    if (t.tab_bottom > 2289) FAIL("no_bottom_bar", "the tableau runs off the bottom");
+
+    Layout d = layout_fixed(MIN_W, MIN_H);
+    if (d.status_h <= 0) FAIL("no_bottom_bar", "the desktop board lost its status bar");
+    PASS("no_bottom_bar");
+}
+
+// Sideways, the wordmark bar must be sized from the SCREEN, not the card. Sizing
+// it from the card is circular and inflated it to 96px on an iPhone 12, eating
+// the scarcest axis.
+static void test_chrome_is_sized_from_the_screen(void) {
+    Layout a = layout_scaled(2250, 1107);
+    Layout b = layout_scaled(2250, 1107);
+    if (a.titlebar_h != b.titlebar_h) FAIL("chrome", "not deterministic");
+    if (a.titlebar_h > 1107 / 20)
+        FAIL("chrome", "the wordmark bar is too tall for a sideways phone");
+    // Same height, very different width -> same chrome, because it follows height.
+    Layout narrow = layout_scaled(1400, 1107);
+    if (narrow.titlebar_h != a.titlebar_h)
+        FAIL("chrome", "the wordmark bar still depends on the card size");
+    PASS("chrome");
+}
+
+// Rails are for phones on their side, not for anything merely wider than tall.
+// They cost three extra columns of width; on a tablet at ~1.33:1 that made the
+// cards SMALLER than the same tablet gives upright, which is the opposite of
+// the point.
+static bool uses_rails(const Layout* L) { return L->stock_x < L->tab_x[0]; }
+
+static void test_rails_only_where_they_pay(void) {
+    Layout phone = layout_scaled(2250, 1107);   // 2.03:1
+    if (!uses_rails(&phone)) FAIL("rails_gate", "a phone on its side did not get rails");
+
+    Layout tablet = layout_scaled(2048, 1536);  // 1.33:1
+    if (uses_rails(&tablet)) FAIL("rails_gate", "a tablet on its side got rails");
+
+    Layout upright = layout_scaled(1536, 2048);
+    if (tablet.card_w < upright.card_w)
+        FAIL("rails_gate", "turning a tablet sideways made the cards smaller");
+
+    Layout portrait = layout_scaled(1170, 2289);
+    if (uses_rails(&portrait)) FAIL("rails_gate", "an upright phone got rails");
+    PASS("rails_gate");
+}
+
 // A display cutout pushes the title bar (and therefore the whole board) down,
 // so nothing is ever drawn under the front camera.
 static void test_scaled_board_clears_a_display_cutout(void) {
@@ -235,7 +327,7 @@ static void test_scaled_board_clears_a_display_cutout(void) {
     Layout notched = layout_scaled(1080, 2400);
     if (notched.titlebar_h < 140)
         FAIL("scaled_cutout", "the title bar does not clear the safe inset");
-    if (notched.top_y <= plain.top_y)
+    if (notched.stock_y <= plain.stock_y)
         FAIL("scaled_cutout", "the board was not pushed below the cutout");
     s_top = s_cutout_left = s_cutout_right = 0;
     PASS("scaled_cutout");
@@ -272,7 +364,7 @@ static void test_deep_column_stays_on_screen(void) {
 
         int ys[52];
         int bottom = tab_card_ys(&L, &p, ys);
-        if (bottom > cases[i].h - L.status_h)
+        if (bottom > L.tab_bottom)
             FAIL("deep_column", cases[i].name);
         for (int c = 1; c < p.count; c++)
             if (ys[c] <= ys[c - 1]) FAIL("deep_column", "cards share a top edge");
@@ -336,14 +428,14 @@ static void test_hit_testing_round_trips(void) {
         probe(g, &L, LOC_FOUNDATION, 0, 0, cases[i].name);
 
         // The stock is a click target of its own, not a card.
-        if (!render_stock_hit(L.col_x[SLOT_STOCK] + L.card_w / 2, L.top_y + L.card_h / 2))
+        if (!render_stock_hit(L.stock_x + L.card_w / 2, L.stock_y + L.card_h / 2))
             FAIL("hit_test", "the stock is not clickable");
-        if (render_stock_hit(L.col_x[SLOT_STOCK] - 4, L.top_y + L.card_h / 2))
+        if (render_stock_hit(L.stock_x - 4, L.stock_y + L.card_h / 2))
             FAIL("hit_test", "the stock swallows a click beside it");
 
         // Bare felt below the board hits nothing.
         PileKind k; int idx, cd;
-        if (hit_at(&L, g, L.col_x[3] + L.card_w / 2, cases[i].h - L.status_h - 1,
+        if (hit_at(&L, g, L.tab_x[3] + L.card_w / 2, L.tab_bottom + 1,
                    &k, &idx, &cd))
             FAIL("hit_test", "empty felt reported a card");
 
@@ -371,21 +463,21 @@ static void test_drop_targeting(void) {
     d.lift = L.card_h * 35 / 100;
 
     // Held over the second foundation, with the finger below the lifted card.
-    d.mouse_x = L.col_x[SLOT_FOUND0 + 1] + L.card_w / 2 + d.grab_dx - L.card_w / 2;
-    d.mouse_y = L.top_y + L.card_h / 2 + d.grab_dy - L.card_h / 2 + d.lift;
+    d.mouse_x = L.found_x[1] + d.grab_dx;
+    d.mouse_y = L.found_y[1] + d.grab_dy + d.lift;
     PileKind k; int idx;
     if (!drop_target_at(&L, g, &d, &k, &idx) || k != LOC_FOUNDATION || idx != 1)
         FAIL("drop_target", "a run over a foundation did not target it");
 
     // Held over the fifth tableau column.
-    d.mouse_x = L.col_x[4] + d.grab_dx;
+    d.mouse_x = L.tab_x[4] + d.grab_dx;
     d.mouse_y = L.tab_y + d.grab_dy + d.lift;
     if (!drop_target_at(&L, g, &d, &k, &idx) || k != LOC_TABLEAU || idx != 4)
         FAIL("drop_target", "a run over a column did not target it");
 
     // Held out over the felt below every column: no target, so the run returns.
-    d.mouse_x = L.col_x[6] + L.card_w + L.col_gap + d.grab_dx;
-    d.mouse_y = L.tab_y + d.grab_dy + d.lift;
+    d.mouse_x = L.view_w - 1;
+    d.mouse_y = L.tab_bottom + L.card_h;
     if (drop_target_at(&L, g, &d, &k, &idx))
         FAIL("drop_target", "bare felt was reported as a drop target");
 
@@ -400,6 +492,10 @@ int main(void) {
     test_scaled_board_scales_with_the_screen();
     test_scaled_board_widens_the_fan_for_fingers();
     test_landscape_uses_the_width();
+    test_rails_only_where_they_pay();
+    test_piles_never_overlap();
+    test_touch_board_has_no_bottom_bar();
+    test_chrome_is_sized_from_the_screen();
     test_scaled_board_clears_a_display_cutout();
     test_deep_column_stays_on_screen();
     test_hit_testing_round_trips();

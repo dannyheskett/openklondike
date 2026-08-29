@@ -107,48 +107,64 @@ async function tap(page, [x, y]) {
 // of step with the C.
 function boardGeometry(w, h) {
   const margin = Math.max(Math.floor(Math.min(w, h) / 28), 6);
-  const titleFsOf = (cw) => Math.max(Math.floor((cw * 22) / 80), 10);
+  const titleFs = Math.max(Math.floor(h / 45), 10);
+  const bar = titleFs + Math.floor(titleFs / 2);
+  const hudFs = Math.max(Math.floor(Math.min(w, h) / 38), 9);
+  const hud = 2 * hudFs + Math.floor(hudFs / 3);
 
-  // Width pass: 7 cards plus 6 gaps of a fifth of a card each span the usable width.
-  let cardW = Math.floor(((w - 2 * margin) * 10) / 82);
+  const boardY = bar + margin + hud + margin;
+  const availH = Math.max(h - boardY - margin, 8);
+  const usableW = w - 2 * margin;
 
-  // Height pass: three card-heights of playable space in landscape, four in
-  // portrait. This is what shrinks the cards when the short axis binds, and it
-  // is why a landscape mirror cannot skip it.
-  const wantHeights = w > h ? 3 : 4;
-  for (let pass = 0; pass < 2; pass += 1) {
-    const cardH = Math.floor((cardW * 112) / 80);
-    const top = Math.max(2 * titleFsOf(cardW), 1);
-    const statusH = Math.floor((Math.max(Math.floor((cardW * 18) / 80), 9) * 14) / 9);
-    const rowGap = Math.floor((cardW * 28) / 80);
-    const budget = Math.max(h - top - margin - rowGap - statusH, 4);
-    if (wantHeights * cardH > budget) {
-      cardW = Math.floor((Math.floor(budget / wantHeights) * 80) / 112);
-    } else {
-      break;
+  // 1.6:1 or wider gets the rails arrangement: 10 card columns, tableau full height.
+  const sideways = w * 10 >= h * 16;
+  const cols = sideways ? 10 : 7;
+  let cardW = Math.floor((usableW * 10) / (cols * 10 + (cols - 1) * 2));
+
+  const gapOf = (cw) => Math.max(Math.floor((cw * 16) / 80), 2);
+  if (sideways) {
+    const byHeight = Math.floor((availH * 80) / 112);
+    const byFound = Math.floor(((availH - gapOf(cardW)) / 2) * 80 / 112);
+    cardW = Math.min(cardW, byHeight, byFound);
+  } else {
+    for (let pass = 0; pass < 2; pass += 1) {
+      const cardH = Math.floor((cardW * 112) / 80);
+      const rowGap = Math.floor((cardW * 28) / 80);
+      if (4 * cardH + rowGap <= availH) break;
+      cardW = Math.floor(((availH - rowGap) / 4) * 80 / 112);
     }
   }
-
+  cardW = Math.max(cardW, 24);
   const cardH = Math.floor((cardW * 112) / 80);
-  const fanDown = Math.max(Math.floor((cardW * 12) / 80), 3);
-  const topY = 2 * titleFsOf(cardW) + margin;
-  const tabY = topY + cardH + Math.floor((cardW * 28) / 80);
 
-  // Leftover width goes into the gaps, capped at half a card.
-  let gap = Math.max(Math.floor((cardW * 16) / 80), 2);
-  const leftover = w - 2 * margin - 7 * cardW - 6 * gap;
+  let gap = gapOf(cardW);
+  const leftover = usableW - cols * cardW - (cols - 1) * gap;
   if (leftover > 0) {
-    gap += Math.min(Math.floor(leftover / 6), Math.max(Math.floor(cardW / 2) - gap, 0));
+    gap += Math.min(Math.floor(leftover / (cols - 1)), Math.max(Math.floor(cardW / 2) - gap, 0));
   }
+  const content = cols * cardW + (cols - 1) * gap;
+  const left = Math.max(Math.floor((w - content) / 2), 0);
+  const step = cardW + gap;
+  const fanDown = Math.max(Math.floor((cardW * 12) / 80), 3);
 
-  const left = Math.max(Math.floor((w - (7 * cardW + 6 * gap)) / 2), 0);
-  const colX = (c) => left + c * (cardW + gap) + cardW / 2;
+  let stock, waste, tabX, tabY;
+  if (sideways) {
+    stock = [left + cardW / 2, boardY + cardH / 2];
+    waste = [left + cardW / 2, boardY + cardH + gap + cardH / 2];
+    tabX = (c) => left + (c + 1) * step + cardW / 2;
+    tabY = boardY;
+  } else {
+    tabX = (c) => left + c * step + cardW / 2;
+    stock = [tabX(0), boardY + cardH / 2];
+    waste = [tabX(1), boardY + cardH / 2];
+    tabY = boardY + cardH + Math.floor((cardW * 28) / 80);
+  }
   return {
-    stock: [colX(0), topY + cardH / 2],
-    waste: [colX(1), topY + cardH / 2],
+    stock,
+    waste,
     // Column c holds c + 1 cards, all but the last face down, so its top card
     // sits c face-down fan steps below the start of the tableau.
-    column: (c) => [colX(c), tabY + c * fanDown + cardH / 2],
+    column: (c) => [tabX(c), tabY + c * fanDown + cardH / 2],
   };
 }
 
@@ -349,7 +365,17 @@ async function main() {
 
     // Tap each tableau's top card: any Ace flies to a foundation, and the rest
     // settle onto whatever they legally build on.
+    //
+    // Asserted, because boardGeometry() mirrors the C by hand and has drifted
+    // out of step with it more than once. When it does, every tap lands on bare
+    // felt and the only symptom is a folder of dull fresh-deal screenshots --
+    // which is exactly the kind of thing that ships unnoticed.
+    const beforeTaps = await frameId(page);
     for (let c = 0; c < 7; c += 1) await tap(page, board.column(c));
+    if (await frameId(page) === beforeTaps) {
+      throw new Error('tapping the tableau changed nothing; boardGeometry() has '
+                      + 'drifted from layout_scaled() in src/render_scaled.c');
+    }
     await shoot(page, target, '03-play.png');
 
     // Work the stock so the waste is showing, then try the turned card.

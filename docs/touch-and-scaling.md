@@ -112,7 +112,50 @@ every frame, the Android Activity declares the relevant `configChanges` so it is
 not restarted mid-game, and the iOS Metal view already recomputed its drawable
 and safe-area insets in `layoutSubviews` / `safeAreaInsetsDidChange`.
 
-## 5. The clock had to stop counting frames
+## 5. Chrome is sized from the screen, and the bottom bar is gone
+
+Two things real-device testing exposed that rendered frames had not.
+
+The status bar pinned along the bottom looked wrong on iPhone: iOS hands the
+game a viewport that already excludes the home indicator, so the bar sat flush
+against it, cramped and in the way. Both sibling games solve this the same way —
+wordmark bar pinned top, a stats band directly beneath it, nothing at the bottom
+— so openklondike now does too. The band is openblocks' HUD: label over value,
+label muted, value picked out. The wordmark bar itself is untouched.
+
+The second was a genuine bug. The wordmark bar's height was derived from the
+**card width** (`card_w * 22 / 80`). That is circular — a taller bar shrinks the
+card, which shrinks the bar — and on an iPhone 12 held sideways it inflated the
+bar to 96px where the siblings' screen-derived formula gives 36. It was quietly
+eating 60px of the scarcest axis. All chrome now follows the screen: the
+wordmark bar the height, the stats band the *short* dimension (the board is
+fitted to the width, so a height-derived font came out enormous next to the
+cards on a tall phone).
+
+## 6. Sideways, the board rearranges
+
+A top row of stock, waste and foundations costs a whole card height. Upright
+that is cheap; sideways it is the scarcest thing there is. So past 1.6:1 the
+board rearranges: stock and waste into a rail down the left, the four
+foundations into a 2x2 block on the right, and the seven tableau columns take
+the entire height between the bars — ten card columns across instead of seven.
+
+On an iPhone 12 (2250x1107 of safe area) that is:
+
+| | card | chrome | board width | tableau |
+| --- | --- | --- | --- | --- |
+| before | 176x246 | 96 + 60 | 77% | 2.5 card heights |
+| after | 184x257 | 36 + 67 | 96% | 3.5 card heights |
+
+The 1.6:1 gate matters. Rails cost three extra columns of width, which only pays
+for itself when height is genuinely scarce. A tablet turned sideways is about
+1.33:1 and has height to spare; giving it rails made its cards *smaller* than
+the same tablet upright (164px against 174px). Keeping the row there gives it
+205px instead. `tests/test_layout.c` pins that, along with the rule that no two
+piles may overlap — an invariant the old single row of seven could not break by
+construction, and ten hand-placed piles very much can.
+
+## 7. The clock had to stop counting frames
 
 `Game.timer_frames` incremented once per rendered frame and drove both the
 displayed clock and the −2-points-per-10-seconds penalty. With

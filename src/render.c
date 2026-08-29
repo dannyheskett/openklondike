@@ -89,7 +89,7 @@ int render_card_width(void) { return live_layout().card_w; }
 static int tab_card_ys(const Layout* L, const Pile* p, int* ys) {
     if (p->count == 0) return L->tab_y + L->card_h;
 
-    int avail = L->view_h - L->status_h - L->tab_y - L->card_h;
+    int avail = L->tab_bottom - L->tab_y - L->card_h;
     if (avail < 0) avail = 0;
 
     int span = 0;   // natural distance from the first card's top to the last's
@@ -292,8 +292,8 @@ static bool hit_at(const Layout* L, const Game* g, int mx, int my,
     // Waste: only the top card is interactive.
     if (g->waste.count > 0) {
         int first = waste_fan_first(g, NULL);
-        int tx = L->col_x[SLOT_WASTE] + (g->waste.count - 1 - first) * L->waste_fan;
-        if (in_card(L, mx, my, tx, L->top_y)) {
+        int tx = L->waste_x + (g->waste.count - 1 - first) * L->waste_fan;
+        if (in_card(L, mx, my, tx, L->waste_y)) {
             *kind = LOC_WASTE; *index = 0; *card = g->waste.count - 1;
             return true;
         }
@@ -301,7 +301,7 @@ static bool hit_at(const Layout* L, const Game* g, int mx, int my,
     // Foundations: the top card.
     for (int f = 0; f < 4; f++) {
         if (g->foundation[f].count == 0) continue;
-        if (in_card(L, mx, my, L->col_x[SLOT_FOUND0 + f], L->top_y)) {
+        if (in_card(L, mx, my, L->found_x[f], L->found_y[f])) {
             *kind = LOC_FOUNDATION; *index = f;
             *card = g->foundation[f].count - 1;
             return true;
@@ -311,7 +311,7 @@ static bool hit_at(const Layout* L, const Game* g, int mx, int my,
     for (int c = 0; c < 7; c++) {
         const Pile* p = &g->tableau[c];
         if (p->count == 0) continue;
-        if (mx < L->col_x[c] || mx >= L->col_x[c] + L->card_w) continue;
+        if (mx < L->tab_x[c] || mx >= L->tab_x[c] + L->card_w) continue;
         int ys[52];
         tab_card_ys(L, p, ys);
         for (int i = p->count - 1; i >= 0; i--) {
@@ -333,20 +333,20 @@ static bool card_pos_at(const Layout* L, const Game* g, PileKind kind, int index
     switch (kind) {
         case LOC_WASTE: {
             int first = waste_fan_first(g, NULL);
-            *x = L->col_x[SLOT_WASTE] + (card - first) * L->waste_fan;
-            *y = L->top_y;
+            *x = L->waste_x + (card - first) * L->waste_fan;
+            *y = L->waste_y;
             return true;
         }
         case LOC_FOUNDATION:
-            *x = L->col_x[SLOT_FOUND0 + index];
-            *y = L->top_y;
+            *x = L->found_x[index];
+            *y = L->found_y[index];
             return true;
         case LOC_TABLEAU: {
             const Pile* p = &g->tableau[index];
             if (card < 0 || card >= p->count) return false;
             int ys[52];
             tab_card_ys(L, p, ys);
-            *x = L->col_x[index];
+            *x = L->tab_x[index];
             *y = ys[card];
             return true;
         }
@@ -362,13 +362,13 @@ static bool drop_target_at(const Layout* L, const Game* g, const DragState* d,
     int dy = d->mouse_y - d->grab_dy - d->lift + L->card_h / 2;
 
     for (int f = 0; f < 4; f++) {
-        if (in_card(L, dx, dy, L->col_x[SLOT_FOUND0 + f], L->top_y)) {
+        if (in_card(L, dx, dy, L->found_x[f], L->found_y[f])) {
             *kind = LOC_FOUNDATION; *index = f; return true;
         }
     }
     // Tableau: match by column x, with vertical slack across the whole fan.
     for (int c = 0; c < 7; c++) {
-        int x = L->col_x[c];
+        int x = L->tab_x[c];
         if (dx < x || dx >= x + L->card_w) continue;
         int ys[52];
         int bottom = tab_card_ys(L, &g->tableau[c], ys);
@@ -425,19 +425,78 @@ static void draw_titlebar(const Layout* L) {
     }
 }
 
-static void draw_status(const Game* g, const Layout* L) {
+// The three running numbers. Where they live depends on the board:
+//
+//   desktop   a bar pinned across the bottom, as it always has been
+//   touch     a band directly under the wordmark, laid out like openblocks' and
+//             openrackem's HUD -- label over value, label muted, value picked
+//             out -- because a bar pinned to the bottom of a phone lands on the
+//             home indicator, where it is both cramped and in the way.
+//
+// The wordmark bar itself is untouched by this; it stays exactly where it is.
+static void draw_stat_column(const char* label, const char* value,
+                             int x, int y, int fs, int line_h) {
+    gfx_text(label, x, y, fs, TEXT_DIM);
+    gfx_text(value, x, y + line_h, fs, HILITE);
+}
+
+static void format_stats(const Game* g, char* score, char* time, char* moves, int n) {
+    snprintf(score, n, "%d", g->score);
+    snprintf(time,  n, "%d:%02d", g->timer_frames / SIM_HZ / 60,
+                                  (g->timer_frames / SIM_HZ) % 60);
+    snprintf(moves, n, "%d", g->moves);
+}
+
+static void draw_hud_band(const Game* g, const Layout* L) {
+    char score[32], time[32], moves[32];
+    format_stats(g, score, time, moves, 32);
+    int fs = L->status_fs;
+    int line_h = fs + fs / 3;
+
+    // Spread the three columns across the board, which is the width the player
+    // is already reading. Falls back to the full viewport on a board so narrow
+    // the labels would not fit inside it.
+    int board_l = L->tab_x[0];
+    int board_r = L->tab_x[6] + L->card_w;
+    int span = board_r - board_l;
+    int w_score = gfx_measure_text("SCORE", fs);
+    int w_time  = gfx_measure_text("TIME", fs);
+    int w_moves = gfx_measure_text("MOVES", fs);
+    if (w_score + w_time + w_moves + 2 * fs > span) {
+        board_l = L->margin_x;
+        span = L->view_w - 2 * L->margin_x;
+    }
+    int gap = (span - w_score - w_time - w_moves) / 2;
+    if (gap < 0) gap = 0;
+
+    int x = board_l;
+    draw_stat_column("SCORE", score, x, L->hud_y, fs, line_h);
+    x += w_score + gap;
+    draw_stat_column("TIME", time, x, L->hud_y, fs, line_h);
+    x += w_time + gap;
+    draw_stat_column("MOVES", moves, x, L->hud_y, fs, line_h);
+}
+
+static void draw_status_bar(const Game* g, const Layout* L) {
+    char score[32], time[32], moves[32];
+    format_stats(g, score, time, moves, 32);
     int fs = L->status_fs;
     int y  = L->view_h - L->status_h + (L->status_h - fs) / 2;
     gfx_rect(0, L->view_h - L->status_h, L->view_w, L->status_h, FELT_DARK);
     char buf[64];
-    snprintf(buf, sizeof buf, "Score %d", g->score);
+    snprintf(buf, sizeof buf, "Score %s", score);
     gfx_text(buf, L->margin_x, y, fs, TEXT_LIGHT);
-    snprintf(buf, sizeof buf, "Time %d", g->timer_frames / SIM_HZ);
+    snprintf(buf, sizeof buf, "Time %s", time);
     int tw = gfx_measure_text(buf, fs);
     gfx_text(buf, L->view_w / 2 - tw / 2, y, fs, TEXT_LIGHT);
-    snprintf(buf, sizeof buf, "Moves %d", g->moves);
+    snprintf(buf, sizeof buf, "Moves %s", moves);
     tw = gfx_measure_text(buf, fs);
     gfx_text(buf, L->view_w - L->margin_x - tw, y, fs, TEXT_LIGHT);
+}
+
+static void draw_stats(const Game* g, const Layout* L) {
+    if (L->status_h > 0) draw_status_bar(g, L);
+    else                 draw_hud_band(g, L);
 }
 
 typedef struct { const Game* g; const DragState* drag; } BoardCtx;
@@ -464,36 +523,36 @@ static void draw_board(void* vctx, int view_w, int view_h) {
     draw_titlebar(&L);
 
     // --- Stock ---
-    if (g->stock.count > 0) draw_card_back(&L, L.col_x[SLOT_STOCK], L.top_y);
-    else                    draw_slot(&L, L.col_x[SLOT_STOCK], L.top_y, -1, false);
+    if (g->stock.count > 0) draw_card_back(&L, L.stock_x, L.stock_y);
+    else                    draw_slot(&L, L.stock_x, L.stock_y, -1, false);
 
     // --- Waste (fan up to the last 3 drawn) ---
     if (g->waste.count == 0) {
-        draw_slot(&L, L.col_x[SLOT_WASTE], L.top_y, 0, false);
+        draw_slot(&L, L.waste_x, L.waste_y, 0, false);
     } else {
         int first = waste_fan_first(g, NULL);
         for (int i = first; i < g->waste.count; i++) {
             if (is_dragged(d, LOC_WASTE, 0, i)) continue;
-            draw_card_face(&L, L.col_x[SLOT_WASTE] + (i - first) * L.waste_fan,
-                           L.top_y, g->waste.cards[i], false);
+            draw_card_face(&L, L.waste_x + (i - first) * L.waste_fan,
+                           L.waste_y, g->waste.cards[i], false);
         }
     }
 
     // --- Foundations ---
     for (int f = 0; f < 4; f++) {
-        int fx = L.col_x[SLOT_FOUND0 + f];
+        int fx = L.found_x[f], fy = L.found_y[f];
         const Pile* p = &g->foundation[f];
         int n = p->count;
         if (is_dragged(d, LOC_FOUNDATION, f, n - 1)) n--;   // hide grabbed top
         bool hl = (hi_kind == LOC_FOUNDATION && hi_index == f);
-        if (n == 0) draw_slot(&L, fx, L.top_y, 0, hl);
-        else        draw_card_face(&L, fx, L.top_y, p->cards[n - 1], hl);
+        if (n == 0) draw_slot(&L, fx, fy, 0, hl);
+        else        draw_card_face(&L, fx, fy, p->cards[n - 1], hl);
     }
 
     // --- Tableau ---
     for (int c = 0; c < 7; c++) {
         const Pile* p = &g->tableau[c];
-        int x = L.col_x[c];
+        int x = L.tab_x[c];
         bool hl = (hi_kind == LOC_TABLEAU && hi_index == c);
         if (p->count == 0) {
             draw_slot(&L, x, L.tab_y, 0, hl);
@@ -520,7 +579,7 @@ static void draw_board(void* vctx, int view_w, int view_h) {
             draw_card_face(&L, dx, dy + i * L.fan_up, d->cards[i], false);
     }
 
-    draw_status(g, &L);
+    draw_stats(g, &L);
 }
 
 // --------------------------------------------------------------------------
@@ -739,7 +798,7 @@ int render_menu_hit_test(Vector2 p) {
 // --------------------------------------------------------------------------
 bool render_stock_hit(int mx, int my) {
     Layout L = live_layout();
-    return in_card(&L, mx, my, L.col_x[SLOT_STOCK], L.top_y);
+    return in_card(&L, mx, my, L.stock_x, L.stock_y);
 }
 
 bool render_hit(const Game* g, int mx, int my,
@@ -807,8 +866,8 @@ void render_bounce_begin(const Game* g) {
     Layout L = layout_for(B.W, B.H);
     for (int f = 0; f < 4; f++) {
         B.found[f] = g->foundation[f];
-        B.found_x[f] = L.col_x[SLOT_FOUND0 + f];
-        B.found_y[f] = L.top_y;
+        B.found_x[f] = L.found_x[f];
+        B.found_y[f] = L.found_y[f];
     }
 
 #if defined(PLATFORM_IOS)

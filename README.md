@@ -11,12 +11,15 @@ platform-independent and shared unchanged.
 
 ## Platforms
 
-| Platform | Build | Board | Input |
-|----------|-------|-------|-------|
-| Linux / Windows / macOS | native (raylib) | fixed | mouse |
-| Web (WASM) | Emscripten (raylib) | fixed **or** scaled, chosen at runtime | mouse + touch |
-| Android | NativeActivity (raylib) | scaled | touch |
-| iOS | native Metal (no raylib) | scaled | touch |
+| Platform | Build | Board | Orientation | Input |
+|----------|-------|-------|-------------|-------|
+| Linux / Windows / macOS | native (raylib) | fixed | resizable window | mouse |
+| Web (WASM) | Emscripten (raylib) | fixed **or** scaled, chosen at runtime | follows the browser | mouse + touch |
+| Android | NativeActivity (raylib) | scaled | portrait **and** landscape | touch |
+| iOS | native Metal (no raylib) | scaled | portrait **and** landscape | touch |
+
+Note that "fixed" and "scaled" describe the *board*, not the device orientation:
+the scaled board is the one phones use, and it works in either orientation.
 
 ## The two boards
 
@@ -36,7 +39,11 @@ desktop browser gets the same board as the native app.
   from the resulting card size at the same ratios the fixed layout uses. So the
   two are the same design at different sizes, not two designs. The face-up fan
   is spread wider than the desktop ratio, because a fingertip needs a bigger
-  target than the sliver a mouse can hit.
+  target than the sliver a mouse can hit. It is recomputed from the live screen
+  size every frame, so **rotating the device just re-fits the board** — held
+  sideways it asks for less vertical room per column (letting the draw-time fan
+  compression take up the slack rather than shrinking the cards) and spends the
+  spare width on wider column gaps.
 
 Either way, a column deeper than the board is tall — up to six face-down cards
 under a full King-to-Ace run — compresses its fan until it fits above the status

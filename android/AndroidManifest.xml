@@ -24,8 +24,8 @@
 
         <activity android:name="com.danheskett.openklondike.OpenklondikeActivity"
                   android:label="openklondike"
-                  android:screenOrientation="portrait"
-                  android:configChanges="orientation|keyboardHidden|screenSize"
+                  android:screenOrientation="fullUser"
+                  android:configChanges="orientation|keyboardHidden|screenSize|screenLayout|smallestScreenSize"
                   android:exported="true"
                   android:theme="@style/OpenklondikeTheme">
 

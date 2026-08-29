@@ -123,6 +123,8 @@ static void test_portrait_fits_every_screen(void) {
         { 1170, 2532, "iPhone 13/14" },
         { 1536, 2048, "tablet" },
         {  800,  400, "phone browser, sideways" },
+        { 2400, 1080, "phone, landscape" },
+        { 2048, 1536, "tablet, landscape" },
         {  320,  480, "smallest sane screen" },
     };
     for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
@@ -172,7 +174,8 @@ static void test_portrait_scales_with_the_screen(void) {
 // needs a bigger target than the 28/80 sliver a mouse can hit -- but never so
 // wide that a run stops looking stacked.
 static void test_portrait_widens_the_fan_for_fingers(void) {
-    const struct { int w, h; } screens[] = { {1080, 2400}, {720, 1280}, {1536, 2048} };
+    const struct { int w, h; } screens[] = {
+        {1080, 2400}, {720, 1280}, {1536, 2048}, {2400, 1080}, {2048, 1536} };
     for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
         Layout L = layout_portrait(screens[i].w, screens[i].h);
         if (L.fan_up < L.card_w * 28 / 80)
@@ -185,6 +188,35 @@ static void test_portrait_widens_the_fan_for_fingers(void) {
             FAIL("portrait_fan", "a busy column no longer fits at the wider fan");
     }
     PASS("portrait_fan");
+}
+
+// Held sideways, the board must actually use the screen. The first cut of the
+// touch layout capped the card size on the short axis and then centred seven
+// narrow columns in a wide screen, leaving well over half the width as bare
+// felt and the cards smaller than the same phone gives in portrait. Both of
+// those are asserted against here.
+static void test_landscape_uses_the_width(void) {
+    const struct { int w, h; const char* name; } screens[] = {
+        { 2400, 1080, "phone, landscape" },
+        { 1920,  900, "narrow phone, landscape" },
+        { 2048, 1536, "tablet, landscape" },
+    };
+    for (unsigned i = 0; i < sizeof screens / sizeof screens[0]; i++) {
+        Layout L = layout_portrait(screens[i].w, screens[i].h);
+        int usable  = screens[i].w - 2 * L.margin_x;
+        int content = board_right(&L) - L.col_x[0];
+        if (content * 10 < usable * 6)
+            FAIL("landscape_width", "the board uses under 60% of the usable width");
+        if (content > usable)
+            FAIL("landscape_width", "the board overflows the usable width");
+    }
+
+    // Rotating a phone must not shrink the cards.
+    Layout up   = layout_portrait(1080, 2400);
+    Layout side = layout_portrait(2400, 1080);
+    if (side.card_w < up.card_w)
+        FAIL("landscape_width", "turning the phone sideways made the cards smaller");
+    PASS("landscape_width");
 }
 
 // A display cutout pushes the title bar (and therefore the whole board) down,
@@ -225,6 +257,7 @@ static void test_deep_column_stays_on_screen(void) {
         { 1080, 2400,   true,  "phone" },
         {  720, 1280,   true,  "small phone" },
         { 1536, 2048,   true,  "tablet" },
+        { 2400, 1080,   true,  "phone, landscape" },
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
         use_screen(cases[i].w, cases[i].h, cases[i].portrait);
@@ -281,6 +314,7 @@ static void test_hit_testing_round_trips(void) {
         { 1600, 1000,   false, "desktop maximised" },
         { 1080, 2400,   true,  "phone" },
         { 1536, 2048,   true,  "tablet" },
+        { 2400, 1080,   true,  "phone, landscape" },
     };
     for (unsigned i = 0; i < sizeof cases / sizeof cases[0]; i++) {
         use_screen(cases[i].w, cases[i].h, cases[i].portrait);
@@ -361,6 +395,7 @@ int main(void) {
     test_portrait_fits_every_screen();
     test_portrait_scales_with_the_screen();
     test_portrait_widens_the_fan_for_fingers();
+    test_landscape_uses_the_width();
     test_portrait_clears_a_display_cutout();
     test_deep_column_stays_on_screen();
     test_hit_testing_round_trips();

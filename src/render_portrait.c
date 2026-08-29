@@ -41,11 +41,16 @@ Layout layout_portrait(int view_w, int view_h) {
 
     // Height pass. A column needs room for the top row plus a tableau fan below
     // it; a typical column is the card plus eight fan steps, which at these
-    // ratios is almost exactly two more card heights. Requiring four card
-    // heights of playable space keeps a normal deal fully visible, and shrinks
-    // the cards on a short screen (a phone browser held sideways) instead of
-    // burying the tableau off the bottom edge. Deeper columns than that are
-    // handled by compressing the fan at draw time.
+    // ratios is almost exactly two more card heights.
+    //
+    // How much to insist on depends on the shape of the screen. Held upright
+    // there is height to spare, so ask for four card-heights and a normal deal
+    // is fully visible with no fan compression at all. Held sideways a phone has
+    // barely half that, and demanding four there just shrinks the cards until
+    // they are unreadable while two thirds of the width sits empty -- so ask for
+    // three and let the draw-time fan compression absorb the difference, which
+    // is what it is for.
+    int want_heights = (view_w > view_h) ? 3 : 4;
     for (int pass = 0; pass < 2; pass++) {
         int card_h = card_w * CARD_H / CARD_W;
         int top    = imax(2 * R_TITLE_FS(card_w), 1);
@@ -55,8 +60,8 @@ Layout layout_portrait(int view_w, int view_h) {
         int status = R_STATUS_FS(card_w) * 14 / 9;
         int budget = view_h - top - margin - R_ROW_GAP(card_w) - status;
         if (budget < 4) budget = 4;
-        if (4 * card_h > budget) {
-            card_h = budget / 4;
+        if (want_heights * card_h > budget) {
+            card_h = budget / want_heights;
             card_w = card_h * CARD_W / CARD_H;
         } else {
             break;   // it already fits; the second pass would change nothing
@@ -85,6 +90,20 @@ Layout layout_portrait(int view_w, int view_h) {
     int cut_top, cut_l, cut_r;
     safe_area_get(&cut_top, &cut_l, &cut_r);
     if (cut_top > L.titlebar_h) L.titlebar_h = cut_top;
+
+    // Any width the height pass left unspent goes into the column gaps, so the
+    // board spans the screen instead of huddling in the middle of it with dead
+    // felt either side -- the shape a sideways phone otherwise ends up with.
+    // Capped at half a card: past that the columns stop reading as one board.
+    // In portrait the width pass already consumed everything, so this is a
+    // no-op there.
+    int leftover = view_w - 2 * margin - 7 * L.card_w - 6 * L.col_gap;
+    if (leftover > 0) {
+        int room = L.card_w / 2 - L.col_gap;
+        int extra = leftover / 6;
+        if (room < 0) room = 0;
+        L.col_gap += (extra < room) ? extra : room;
+    }
 
     // Centre the seven columns in whatever width the final card size leaves.
     int content_w = 7 * L.card_w + 6 * L.col_gap;

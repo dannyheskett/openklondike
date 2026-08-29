@@ -48,8 +48,7 @@ Layout layout_portrait(int view_w, int view_h) {
     // handled by compressing the fan at draw time.
     for (int pass = 0; pass < 2; pass++) {
         int card_h = card_w * CARD_H / CARD_W;
-        int bar    = imax(2 * R_TITLE_FS(card_w), 1);
-        int top    = imax(bar, 0);
+        int top    = imax(2 * R_TITLE_FS(card_w), 1);
         int tcut, cl, cr;
         safe_area_get(&tcut, &cl, &cr);
         if (tcut > top) top = tcut;

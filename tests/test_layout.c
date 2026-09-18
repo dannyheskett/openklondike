@@ -27,6 +27,7 @@
 #include "../src/safe_area.c"
 #include "../src/menu.c"
 #include "../src/present.c"
+#include "../src/recorder.c"
 #include "../src/window.c"
 
 #include <stdio.h>

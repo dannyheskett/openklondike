@@ -9,7 +9,7 @@
 // the desktop recorder is running, once more at the fixed capture size
 // (REC_W x REC_H, platform.h), supersampled 2x and minified for anti-aliasing.
 // Scenes therefore derive every metric from the view they are given, never
-// from the window.
+// from the window. While recording, the window also shows a small REC mark.
 
 typedef void (*SceneFn)(void* ctx, int view_w, int view_h);
 

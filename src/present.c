@@ -35,8 +35,17 @@ void present_cleanup(void) {
 }
 
 void present(SceneFn scene, void* ctx) {
+    int w = GetScreenWidth(), h = GetScreenHeight();
     gfx_begin_frame();
-    scene(ctx, GetScreenWidth(), GetScreenHeight());
+    scene(ctx, w, h);
+    if (recorder_active()) {
+        // A small REC mark in the window's top-left corner while recording.
+        // Window only: the capture below never shows it.
+        int ref = (w > h) ? w : h;
+        int fs = ref / 64, r = fs / 3;
+        gfx_circle((float)(fs / 2 + r), (float)(fs / 2 + fs / 2), (float)r, (Color){ 230, 41, 55, 255 });
+        gfx_text("REC", fs / 2 + r * 3, fs / 2, fs, (Color){ 230, 41, 55, 255 });
+    }
     gfx_end_frame();
 
 #ifdef PRESENT_RECORDS

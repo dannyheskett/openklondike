@@ -38,6 +38,8 @@ void gfx_text(const char* t, int x, int y, int fs, Color c) {
 }
 // Roughly Nunito's advance: about 0.6 of the size per character.
 int gfx_measure_text(const char* t, int fs) { return (int)strlen(t) * fs * 6 / 10; }
+void gfx_circle(float x, float y, float r, Color c) { (void)x; (void)y; (void)r; (void)c; }
+bool recorder_active(void) { return false; }
 
 static const MenuTheme THEME = { {0}, {0}, {0}, {0}, {0}, {0} };
 static const char* ITEMS[] = { "Resume Game", "New Game", "Options", "Sound: Off",

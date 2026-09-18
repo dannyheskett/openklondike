@@ -36,7 +36,7 @@
     // Safari workaround (entirely in Safari's own APIs — raylib is untouched):
     // raylib's web backend sizes the canvas from window.innerWidth/innerHeight.
     // On mobile Safari innerHeight is the *large* layout viewport (the area
-    // behind the toolbar), so the bottom of the game (the control buttons) gets
+    // behind the toolbar), so the bottom of the game gets
     // cut off. We shadow innerWidth/innerHeight with the visualViewport size —
     // the actually-visible area — BEFORE the WASM module loads, so raylib reads
     // the visible dimensions. Desktop is unaffected (visualViewport == inner*).

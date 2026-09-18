@@ -20,15 +20,14 @@
 #define CONTENT_W  (7 * CARD_W + 6 * COL_GAP)   // 7-column board width
 
 Layout layout_fixed(int view_w, int view_h) {
-    // The cards never scale while the viewport honours the minimum size, and the
-    // desktop builds enforce that minimum on the window itself (SetWindowMinSize
-    // in render_init). The web build cannot: a browser window is whatever the
-    // user drags it to. So rather than run the board off the edge, shrink it to
-    // fit. The factor is clamped at 1.0, so this only ever reduces below the
-    // minimum and never enlarges the fixed size on a big display.
+    // The cards never scale while the view is at least BOARD_W x BOARD_H. A
+    // smaller window (the family minimum is 640x480, window.h) or browser
+    // viewport shrinks the board to fit rather than running it off the edge.
+    // The factor is clamped at 1.0, so this only ever reduces and never
+    // enlarges the fixed size on a big display.
     float s = 1.0f;
-    if (view_w < MIN_W) s = (float)view_w / MIN_W;
-    if (view_h < MIN_H) { float sy = (float)view_h / MIN_H; if (sy < s) s = sy; }
+    if (view_w < BOARD_W) s = (float)view_w / BOARD_W;
+    if (view_h < BOARD_H) { float sy = (float)view_h / BOARD_H; if (sy < s) s = sy; }
     if (s < 0.25f) s = 0.25f;   // past this the card indices are unreadable anyway
 #define S(v) ((int)((v) * s + 0.5f))
 

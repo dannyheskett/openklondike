@@ -1,6 +1,6 @@
 // iOS app shell: a UIKit application hosting a CAMetalLayer view driven by a
 // CADisplayLink. No Storyboard, no scene manifest — a classic AppDelegate
-// window. The display link runs the shared game loop (ok_app_frame); touches and
+// window. The display link runs the shared game loop (app_frame); touches and
 // gesture recognizers feed the platform layer (plat_ios) that the game polls.
 #import <UIKit/UIKit.h>
 
@@ -9,13 +9,13 @@
 #import "gfx_metal.h"
 #import "plat_ios.h"
 
-@interface OKMetalView : UIView
+@interface MetalView : UIView
 @property (nonatomic) BOOL started;
 @property (nonatomic) NSInteger originX; // safe-area left inset, pixels
 @property (nonatomic) NSInteger originY; // safe-area top inset, pixels
 @end
 
-@implementation OKMetalView
+@implementation MetalView
 
 + (Class)layerClass { return [CAMetalLayer class]; }
 
@@ -27,7 +27,7 @@
     self.multipleTouchEnabled = YES;
     gfx_metal_attach((CAMetalLayer*)self.layer);
     [self updateDrawableSize];
-    ok_app_init();
+    app_init();
 
     // Gesture recognizers (don't swallow the raw touches the game also reads).
     UITapGestureRecognizer* tap =
@@ -75,7 +75,7 @@
 
     // Draw inside the safe area: the game's (0,0)..(w,h) maps to the region
     // between the notch/Dynamic Island and the home indicator. The area outside
-    // clears to black, which matches the game background, so it's seamless.
+    // clears to the frame's gfx_clear colour, so it's seamless.
     UIEdgeInsets ins = self.safeAreaInsets;
     NSInteger ox = (NSInteger)(ins.left * scale);
     NSInteger oy = (NSInteger)(ins.top  * scale);
@@ -89,7 +89,7 @@
     plat_ios_set_screen((int)sw, (int)sh);
 }
 
-- (void)onFrame:(CADisplayLink*)link { (void)link; ok_app_frame(); }
+- (void)onFrame:(CADisplayLink*)link { (void)link; app_frame(); }
 
 // --- Touches: publish the set of active points (in drawable pixels). --------
 - (void)publishTouches:(UIEvent*)event {
@@ -133,7 +133,7 @@
     CGRect bounds = [UIScreen mainScreen].bounds;
     self.window = [[UIWindow alloc] initWithFrame:bounds];
     UIViewController* vc = [[UIViewController alloc] init];
-    vc.view = [[OKMetalView alloc] initWithFrame:bounds];
+    vc.view = [[MetalView alloc] initWithFrame:bounds];
     self.window.rootViewController = vc;
     [self.window makeKeyAndVisible];
 

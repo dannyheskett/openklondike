@@ -14,7 +14,7 @@ import android.view.WindowManager;
 /**
  * NativeActivity subclass whose only job is to make the game truly immersive:
  * hide the status and navigation bars and draw edge-to-edge, so there is no
- * reserved black band above the board. The C game code is unchanged and
+ * reserved black band above the game. The C game code is unchanged and
  * still loaded via the "android.app.lib_name" manifest meta-data.
  *
  * The theme (windowLayoutInDisplayCutoutMode=shortEdges) plus raylib's
@@ -37,9 +37,11 @@ public class OpenklondikeActivity extends NativeActivity {
         System.loadLibrary("openklondike");
     }
 
-    // Implemented in native (src/safe_area.c). Hands the display-cutout geometry
-    // to the renderer so it can lay the title bar out around the front camera.
-    private native void nativeSetSafeInsets(int top, int cutoutLeft, int cutoutRight);
+    // Implemented in native (src/safe_area.c). Hands the window insets to the
+    // layout so the game stays clear of the camera cutout and the gesture bar.
+    // All four edges: sideways, the cutout and the bar sit on a side edge.
+    private native void nativeSetSafeInsets(int top, int bottom, int left, int right,
+                                            int cutoutLeft, int cutoutRight);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,19 +66,22 @@ public class OpenklondikeActivity extends NativeActivity {
     }
 
     private void pushSafeInsets() {
-        int top = 0, left = 0, right = 0;
+        int top = 0, bottom = 0, left = 0, right = 0, cutLeft = 0, cutRight = 0;
         if (Build.VERSION.SDK_INT >= 28) {
             WindowInsets wi = getWindow().getDecorView().getRootWindowInsets();
             DisplayCutout dc = (wi != null) ? wi.getDisplayCutout() : null;
             if (dc != null) {
                 top = dc.getSafeInsetTop();
+                bottom = dc.getSafeInsetBottom();
+                left = dc.getSafeInsetLeft();
+                right = dc.getSafeInsetRight();
                 // The top-edge cutout is the bounding rect flush with the top of
                 // the screen; take its horizontal extent so native knows where
                 // the camera sits.
                 for (Rect r : dc.getBoundingRects()) {
                     if (r.top <= 0) {
-                        left = r.left;
-                        right = r.right;
+                        cutLeft = r.left;
+                        cutRight = r.right;
                         break;
                     }
                 }
@@ -85,7 +90,7 @@ public class OpenklondikeActivity extends NativeActivity {
         // The cutout layout is cosmetic; never let a JNI/link hiccup crash the
         // game.
         try {
-            nativeSetSafeInsets(top, left, right);
+            nativeSetSafeInsets(top, bottom, left, right, cutLeft, cutRight);
         } catch (Throwable t) {
             // Fall back to the plain centered wordmark (native keeps zeros).
         }

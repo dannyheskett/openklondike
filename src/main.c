@@ -5,6 +5,8 @@
 #include "recorder.h"
 #include "app.h"
 #include "tick.h"
+#include "menu.h"
+#include "window.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,6 +32,18 @@ typedef enum {
     ACT_RECORD,
     ACT_EXIT,
 } MenuAction;
+
+// A menu row picked by the pointer: a completed tap on the touch board, a
+// click with the mouse. On the touch board the press itself is not a pick --
+// it may be the start of a swipe.
+static bool menu_pointer(const Input* in, Vector2* p) {
+    if (in->touch_tap) { *p = (Vector2){in->tap_x, in->tap_y}; return true; }
+    if (in->left_pressed && !render_use_scaled()) {
+        *p = (Vector2){(float)in->mouse_x, (float)in->mouse_y};
+        return true;
+    }
+    return false;
+}
 
 // Upper bound on labels[]/actions[]: one slot per MenuAction. Each action
 // appears at most once, so build_menu can never overflow.
@@ -115,7 +129,6 @@ typedef struct {
     bool      quit;
     SimClock  clock;    // fixed-timestep accumulator (drained on the menu)
     double    prev_time;// GetTime() at the previous frame; 0 before the first
-    bool      had_focus;// window focus on the previous frame (touch auto-pause)
 } AppCtx;
 
 // Try to begin a drag from the card under the pointer. Returns true if a run
@@ -172,18 +185,12 @@ static void frame_step(void* arg) {
     if (c->state == STATE_MENU) sim_clock_reset(&c->clock);
     int steps = sim_clock_advance(&c->clock, dt);
 
-#ifdef OK_TOUCH
-    // Window focus, tracked every frame rather than only while playing: the
-    // edge is what matters, and sampling it in one state only would let a
-    // stale "was focused" survive across a menu visit and fire spuriously on
-    // the first frame of the next game.
-    bool focused = render_window_focused();
-    bool focus_lost = c->had_focus && !focused;
-    c->had_focus = focused;
-#endif
+    // Sampled every frame, not only while playing, so a stale "was focused"
+    // cannot survive a menu visit and fire on the first frame of the next game.
+    bool focus_lost = window_focus_lost();
 
     Input in = input_poll();
-    if (in.fullscreen_toggle) render_toggle_fullscreen();
+    if (in.fullscreen_toggle) window_toggle_fullscreen();
 
     bool resumable = (c->game != NULL && c->game->phase == PHASE_PLAY);
     const char* labels[MAX_MENU_ITEMS];
@@ -207,11 +214,10 @@ static void frame_step(void* arg) {
             c->selected = (c->selected + 1) % menu_count;
             sound_play(SFX_MENU_MOVE);
         }
-        // Touch: a tap directly on a row selects it. A keyboard select activates
-        // whatever is highlighted.
         bool do_select = in.select_pressed;
-        if (in.tap) {
-            int hit = render_menu_hit_test((Vector2){in.tap_x, in.tap_y});
+        Vector2 p;
+        if (menu_pointer(&in, &p)) {
+            int hit = menu_hit_test(p);
             if (hit >= 0 && hit < menu_count) { c->selected = hit; do_select = true; }
         }
         if (do_select) {
@@ -265,8 +271,9 @@ static void frame_step(void* arg) {
         }
         int dir = (in.menu_right ? 1 : 0) - (in.menu_left ? 1 : 0);
         bool do_select = in.select_pressed;
-        if (in.tap) {
-            int hit = render_menu_hit_test((Vector2){in.tap_x, in.tap_y});
+        Vector2 p;
+        if (menu_pointer(&in, &p)) {
+            int hit = menu_hit_test(p);
             if (hit >= 0 && hit < opt_count) { c->selected = hit; do_select = true; }
         }
         if (do_select && c->selected == OPT_BACK) {
@@ -282,22 +289,15 @@ static void frame_step(void* arg) {
 
     case STATE_PLAYING: {
         if (!c->game) { c->state = STATE_MENU; break; }
-#ifdef OK_TOUCH
-        // Fall back to the menu when the app is backgrounded (Android) or the
-        // browser tab loses focus, so the clock is not still running against a
-        // player who has put the phone down. The game stays resumable.
-        //
-        // On the transition, not on the level: a host that never reports focus
-        // at all -- a headless X server, an embedded webview -- would otherwise
-        // bounce the player back to the menu on every frame, making the app
-        // look broken rather than merely unfocused.
+        // Losing focus (app backgrounded, tab hidden, window deactivated)
+        // returns to the menu, so the clock is not running against a player
+        // who has looked away. The game stays resumable.
         if (focus_lost) {
             c->state = STATE_MENU;
             c->selected = 0;
             c->drag.active = false;
             break;
         }
-#endif
         if (in.escape_pressed) {
             c->state = STATE_MENU;
             c->selected = 0;
@@ -315,7 +315,7 @@ static void frame_step(void* arg) {
             } else if (in.left_pressed) {
                 if (render_stock_hit(in.mouse_x, in.mouse_y)) game_draw(c->game);
                 else                                          begin_drag(c->game, &in, &c->drag);
-            } else if (in.tap) {
+            } else if (in.touch_tap) {
                 // A touch tap that grabbed nothing (a face-down card, or the
                 // felt) still asks for an auto-move at that point.
                 auto_move_at(c->game, (int)in.tap_x, (int)in.tap_y);
@@ -352,7 +352,7 @@ static void frame_step(void* arg) {
                 }
                 // The gesture turned out to be a tap, not a drag: send the card
                 // home instead of dropping it back where it started.
-                if (!landed && in.tap)
+                if (!landed && in.touch_tap)
                     game_auto_move(c->game, c->drag.src_kind, c->drag.src_index,
                                    c->drag.src_card);
                 c->drag.active = false;
@@ -409,7 +409,6 @@ static void app_ctx_init(AppCtx* c) {
     c->draw_mode = DRAW_ONE;
     c->quit      = false;
     c->drag.active = false;
-    c->had_focus = true;
     sim_clock_reset(&c->clock);
     c->prev_time = 0.0;
 }
@@ -418,17 +417,17 @@ static void app_ctx_init(AppCtx* c) {
 
 // iOS: UIKit provides main() and the run loop, so the normal main() below is
 // compiled out. The app shell (ios_main.mm) sets up the Metal layer, calls
-// ok_app_init() once, then ok_app_frame() from a CADisplayLink each frame.
+// app_init() once, then app_frame() from a CADisplayLink each frame.
 static AppCtx ios_ctx;
 
-void ok_app_init(void) {
+void app_init(void) {
     srand((unsigned int)time(NULL));
     render_init();   // no-op on iOS (UIKit owns the window)
     sound_init();
     app_ctx_init(&ios_ctx);
 }
 
-void ok_app_frame(void) { frame_step(&ios_ctx); }
+void app_frame(void) { frame_step(&ios_ctx); }
 
 #else
 
@@ -469,7 +468,7 @@ int main(int argc, char** argv) {
     // web (the browser tab owns the lifetime).
     emscripten_set_main_loop_arg(frame_step, &ctx, 0, 1);
 #else
-    while (!render_window_should_close() && !ctx.quit) {
+    while (!window_should_close() && !ctx.quit) {
         frame_step(&ctx);
     }
     recorder_stop();

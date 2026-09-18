@@ -69,12 +69,12 @@ static void test_tap(void) {
     Input in = one(1, 300, 400);
     if (!in.left_pressed) FAIL("tap", "no press on the first frame of contact");
     if (!in.left_down)    FAIL("tap", "the pointer is not held during contact");
-    if (in.tap)           FAIL("tap", "a tap fired before the finger lifted");
+    if (in.touch_tap)           FAIL("tap", "a tap fired before the finger lifted");
 
     for (int i = 0; i < 6; i++) one(1, 300, 400);
     in = none();
     if (!in.left_released) FAIL("tap", "no release when the finger lifted");
-    if (!in.tap)           FAIL("tap", "a still contact was not read as a tap");
+    if (!in.touch_tap)           FAIL("tap", "a still contact was not read as a tap");
     if (in.tap_x != 300.0f || in.tap_y != 400.0f)
         FAIL("tap", "the tap reported the wrong point");
     if (in.escape_pressed) FAIL("tap", "a one-finger tap opened the menu");
@@ -88,13 +88,13 @@ static void test_tap_slop(void) {
     one(1, 300, 400);
     one(1, 306, 404);              // ~7px: inside the 20px slop for a 120px card
     Input in = none();
-    if (!in.tap) FAIL("tap_slop", "a small wobble was not forgiven");
+    if (!in.touch_tap) FAIL("tap_slop", "a small wobble was not forgiven");
 
     reset();
     one(1, 300, 400);
     one(1, 340, 400);              // 40px: unambiguously a drag
     in = none();
-    if (in.tap) FAIL("tap_slop", "a 40px move was still read as a tap");
+    if (in.touch_tap) FAIL("tap_slop", "a 40px move was still read as a tap");
     PASS("tap_slop");
 }
 
@@ -112,7 +112,7 @@ static void test_drag(void) {
 
     in = none();
     if (!in.left_released) FAIL("drag", "no release at the end of the drag");
-    if (in.tap)            FAIL("drag", "a drag was reported as a tap");
+    if (in.touch_tap)            FAIL("drag", "a drag was reported as a tap");
     PASS("drag");
 }
 
@@ -123,7 +123,7 @@ static void test_long_press_is_not_a_tap(void) {
     one(1, 300, 400);
     frame(TAP_MAX_SECONDS + 0.1, 1, 300, 400, 0, 0);
     Input in = none();
-    if (in.tap) FAIL("long_press", "a long hold was reported as a tap");
+    if (in.touch_tap) FAIL("long_press", "a long hold was reported as a tap");
     if (!in.left_released) FAIL("long_press", "no release after a long hold");
     PASS("long_press");
 }
@@ -136,7 +136,7 @@ static void test_two_finger_tap_opens_the_menu(void) {
     frame(FRAME_DT, 2, 300, 400, 500, 400);
     Input in = none();
     if (!in.escape_pressed) FAIL("two_finger", "a two-finger tap did not open the menu");
-    if (in.tap)             FAIL("two_finger", "it also fired a one-finger tap");
+    if (in.touch_tap)             FAIL("two_finger", "it also fired a one-finger tap");
 
     // Held too long, it is not a tap at all and must do nothing.
     reset();
@@ -167,12 +167,12 @@ static void test_sequences_are_independent(void) {
     one(1, 200, 200);
     one(1, 400, 200);
     Input in = none();
-    if (in.tap) FAIL("sequences", "the drag was read as a tap");
+    if (in.touch_tap) FAIL("sequences", "the drag was read as a tap");
 
     in = one(1, 500, 500);
     if (!in.left_pressed) FAIL("sequences", "the second gesture did not press");
     in = none();
-    if (!in.tap) FAIL("sequences", "the tap after a drag was swallowed");
+    if (!in.touch_tap) FAIL("sequences", "the tap after a drag was swallowed");
     if (in.tap_x != 500.0f || in.tap_y != 500.0f)
         FAIL("sequences", "the tap carried the previous gesture's point");
     PASS("sequences");

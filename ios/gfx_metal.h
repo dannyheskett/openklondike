@@ -1,5 +1,5 @@
-#ifndef OPENKLONDIKE_GFX_METAL_H
-#define OPENKLONDIKE_GFX_METAL_H
+#ifndef GFX_METAL_H
+#define GFX_METAL_H
 
 #import <QuartzCore/CAMetalLayer.h>
 
@@ -11,4 +11,4 @@ void gfx_metal_attach(CAMetalLayer* layer);
 // safe-area top-left, so drawing sits below the notch / above the home indicator.
 void gfx_metal_set_viewport(int full_w, int full_h, int origin_x, int origin_y);
 
-#endif // OPENKLONDIKE_GFX_METAL_H
+#endif // GFX_METAL_H

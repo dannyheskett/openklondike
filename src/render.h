@@ -7,19 +7,18 @@
 #include <stdbool.h>
 
 // Desktop card metrics. On the fixed (desktop) layout the cards are exactly
-// this size and never scale: the board is laid out at a fixed pixel size and
-// centred in the window, and only the surrounding margins flex when resized.
-// The window enforces MIN_W x MIN_H -- just big enough to show the board
-// comfortably -- so the fixed size always fits. Both dimensions are multiples of
-// 16 so the recorder can capture them.
+// this size: the board is laid out at a fixed pixel size and centred in the
+// window, and only the surrounding margins flex when resized. BOARD_W x BOARD_H
+// is the view that shows the board comfortably; a smaller window shrinks the
+// board to fit (render_fixed.c).
 //
 // The scaled (touch) layout has no fixed card size: it fits the seven columns
 // to the live screen width and derives every other metric from the result. See
 // render_scaled.c.
 #define CARD_W   80
 #define CARD_H   112
-#define MIN_W    704
-#define MIN_H    704
+#define BOARD_W    704
+#define BOARD_H    704
 
 // A run of cards picked up by the pointer. Owned by main.c, drawn by render.
 typedef struct {
@@ -39,21 +38,15 @@ typedef struct {
     int      lift;
 } DragState;
 
+// Window setup and teardown (window.c) plus the recorder's capture canvas.
 void render_init(void);
 void render_cleanup(void);
-bool render_window_should_close(void);
-void render_toggle_fullscreen(void);
-// True while the app window holds input focus. Used to fall back to the menu
-// when a touch build is sent to the background (Android suspend, browser tab).
-bool render_window_focused(void);
 
 // Scenes -------------------------------------------------------------------
 void render_frame(const Game* g, const DragState* drag);
-void render_menu(const char* title, const char** labels, int count,
+// The family menu (menu.c) on the felt. Hit-test its rows with menu_hit_test().
+void render_menu(const char* title, const char* const* labels, int count,
                  int selected, int gap_before);
-// Menu item index at screen point `p`, or -1. Uses the item rectangles captured
-// by the last render_menu() call (touch menus).
-int  render_menu_hit_test(Vector2 p);
 
 // Win cascade: snapshot the board, then animate bouncing cards. Advances `steps`
 // fixed simulation steps and draws once; returns true when every foundation card

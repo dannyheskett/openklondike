@@ -1,6 +1,14 @@
 #ifndef OPENKLONDIKE_PLATFORM_H
 #define OPENKLONDIKE_PLATFORM_H
 
+// The game's name: window title and recording file prefix.
+#define GAME_NAME "openklondike"
+
+// Recording size (recorder.c): the fixed board's comfortable view. Both are
+// multiples of 16 for the H.264 encoder.
+#define REC_W 704
+#define REC_H 704
+
 // OK_TOUCH selects the touch-first frontend: the adaptive board layout that
 // scales the cards to the screen, and the tap/drag gesture grammar mobile card
 // games use. It is enabled on Android, iOS, and the WebAssembly build (which
@@ -20,8 +28,8 @@
 //                  gaps, font sizes) is derived from the resulting card size.
 //   OK_FIXED — the desktop layout. Cards are a fixed 80x112 and the board is
 //                  centred in the window, exactly as before; only the surrounding
-//                  margins flex. The window enforces a minimum size big enough to
-//                  hold it (see MIN_W/MIN_H), so the fixed size always fits.
+//                  margins flex. Below BOARD_W x BOARD_H (render.h) the whole
+//                  board shrinks to fit.
 // Native desktop compiles only the fixed layout; Android and iOS only the scaled
 // one; the web build compiles BOTH and chooses at runtime (desktop browser ->
 // fixed, phone -> scaled), so a laptop browser gets the same look as the native

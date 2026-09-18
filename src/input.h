@@ -20,7 +20,7 @@ typedef struct {
     // proved to be a tap rather than the start of a drag -- so it arrives as
     // `tap`, together with the point that was tapped.
     bool  auto_move_pressed;
-    bool  tap;
+    bool  touch_tap;
     float tap_x, tap_y;
 
     bool escape_pressed;

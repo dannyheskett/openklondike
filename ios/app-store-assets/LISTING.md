@@ -74,6 +74,15 @@ OPEN SOURCE
 openklondike is MIT licensed. Read the code or build it yourself: https://github.com/dannyheskett/openklondike
 ```
 
+## App Review notes
+
+Sent to Apple's reviewer with every submission that has none yet
+(`scripts/asc_release.py` sets them, with the team's review contact).
+
+```
+Thank you very much for reviewing my game. openklondike is classic Klondike solitaire: tap the stock to deal, drag cards between piles, or tap a card to send it home. It needs no account, sign-in or network access, and uses no special libraries. A two-finger tap opens the menu, where Options sets draw one or draw three.
+```
+
 ## App information
 
 - **Category (primary):** Games → Card

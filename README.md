@@ -29,11 +29,10 @@ and selects at runtime from the pointer type
 (`matchMedia('(pointer: coarse)')`), so a phone gets the touch board and a
 desktop browser gets the same board as the native app.
 
-- **Fixed** (desktop) — cards are exactly 80×112 and never scale. The board is
-  laid out at a fixed pixel size and centred in the window; resizing moves only
-  the margins. The window enforces a 704×704 minimum, which is what lets the
-  card size stay fixed. A browser window cannot be constrained that way, so on
-  web the fixed layout shrinks to fit rather than running off the edge.
+- **Fixed** (desktop) — cards are 80×112 and the board is laid out at a fixed
+  pixel size and centred in the window; making the window larger moves only the
+  margins. In a window or browser viewport smaller than 704×704 the board
+  shrinks to fit rather than running off the edge.
 - **Scaled** (touch) — the board is fitted to the live screen, and every other
   metric (gaps, fans, font sizes) is derived from the resulting card size at the
   ratios the fixed layout uses. Both orientations use the classic arrangement:
@@ -59,8 +58,9 @@ off-screen.
 - **Double-click** a card to send it straight to its foundation
 - **Right-click** a card as a shortcut for the same thing
 - **Escape**: menu &nbsp;·&nbsp; **Alt+Enter**: toggle fullscreen
-- **Up / Down** (or W / S) + **Enter / Space**: menu navigation;
-  **Left / Right** (or A / D) cycle a value on the Options screen
+- **Click a menu row** to choose it, or **Up / Down** (or W / S) +
+  **Enter / Space**; **Left / Right** (or A / D) cycle a value on the Options
+  screen
 
 **Touch** (Android, iOS, and mobile browsers) — the grammar every mobile card
 game uses:
@@ -74,6 +74,29 @@ game uses:
 - **Two-finger tap**: menu (the game stays resumable)
 - **Tap a menu row** to choose it — on the Options screen, tapping a row cycles
   its value; **swipe up / down** moves the selection, **left / right** cycles
+
+## Menu and window
+
+These behave identically in every game in this family (openblocks, openrackem,
+openklondike, opencheckers, openpairs, opensweeper). The code for them
+(`src/menu.c`, `src/window.c`, `src/present.c`, and the gfx, safe-area,
+timing, audio and recorder layers) is the same file in every repo.
+
+- **Menu**: Resume Game (when a game is in progress), New Game, Options (when
+  the game has settings), Sound, Record (desktop only), Exit (desktop only, set
+  apart by a blank line). Options holds the settings and Back.
+- **Menu input**: Up / Down (or W / S) move, Enter / Space choose, Left / Right
+  (or A / D) cycle an Options value, Escape backs out. A mouse click or a tap on
+  a row chooses it. Swipes move the selection and cycle values.
+- **Menu size**: derived from the long edge of the view, so it is the same size
+  upright and sideways and grows with the window; it shrinks only when its rows
+  would not otherwise fit.
+- **Back to the menu**: Escape, Android Back, or a two-finger tap. Losing focus
+  (app backgrounded, tab hidden, window deactivated) also returns to the menu;
+  the game stays resumable.
+- **Window**: desktop opens at 960×720, resizes freely down to 640×480, and
+  Alt+Enter toggles borderless fullscreen and back to the previous window.
+  Web fills the browser viewport. Android and iOS are fullscreen.
 
 ## Building
 
@@ -108,7 +131,7 @@ make android-play   # -> build/openklondike.aab   (Play App Bundle; PLAY_* signi
 
 The app is a `NativeActivity` (no Gradle); a small `OpenklondikeActivity` Java
 class (compiled with `javac` + `d8`) enables immersive full-screen and forwards
-the display cutout to the renderer. arm64-v8a, `targetSdk` 35, 16 KB-page
+the window insets to the renderer. arm64-v8a, `targetSdk` 35, 16 KB-page
 aligned.
 
 ### iOS (needs macOS + Xcode; no raylib)

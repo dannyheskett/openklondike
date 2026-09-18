@@ -29,7 +29,7 @@ static CAMetalLayer*          s_layer;
 static id<MTLRenderPipelineState> s_pipeline;
 static id<MTLSamplerState>    s_sampler;
 static id<MTLTexture>         s_atlas;
-static int                    s_glyph_index[256]; // codepoint -> ok_font_glyphs index
+static int                    s_glyph_index[256]; // codepoint -> font_glyphs index
 
 static std::vector<GVert> s_verts;
 static float s_cr = 0, s_cg = 0, s_cb = 0, s_ca = 1; // clear colour
@@ -39,9 +39,9 @@ static int   s_ox = 0, s_oy = 0;                      // safe-area origin (px)
 // Triple-buffered vertex buffers, reused across frames (grown on demand) instead
 // of allocating one per frame; the semaphore stops us overwriting a buffer the
 // GPU is still reading.
-#define OK_INFLIGHT 3
-static id<MTLBuffer>        s_vbuf[OK_INFLIGHT];
-static NSUInteger           s_vcap[OK_INFLIGHT];
+#define GFX_INFLIGHT 3
+static id<MTLBuffer>        s_vbuf[GFX_INFLIGHT];
+static NSUInteger           s_vcap[GFX_INFLIGHT];
 static int                  s_frame_idx = 0;
 static dispatch_semaphore_t s_inflight;
 
@@ -73,21 +73,21 @@ static void build_font_atlas(void) {
     // Upload the baked Nunito alpha atlas as a single-channel texture. The
     // generator already forced the bottom-right 8x8 block opaque, which is the
     // "white block" solid primitives sample (see uv_white).
-    static unsigned char atlas[OK_FONT_ATLAS_W * OK_FONT_ATLAS_H];
-    memcpy(atlas, ok_font_atlas_alpha, sizeof(atlas));
+    static unsigned char atlas[FONT_ATLAS_W * FONT_ATLAS_H];
+    memcpy(atlas, font_atlas_alpha, sizeof(atlas));
 
     MTLTextureDescriptor* td =
         [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatR8Unorm
-                                                           width:OK_FONT_ATLAS_W
-                                                          height:OK_FONT_ATLAS_H mipmapped:NO];
+                                                           width:FONT_ATLAS_W
+                                                          height:FONT_ATLAS_H mipmapped:NO];
     s_atlas = [s_device newTextureWithDescriptor:td];
-    [s_atlas replaceRegion:MTLRegionMake2D(0, 0, OK_FONT_ATLAS_W, OK_FONT_ATLAS_H)
-               mipmapLevel:0 withBytes:atlas bytesPerRow:OK_FONT_ATLAS_W];
+    [s_atlas replaceRegion:MTLRegionMake2D(0, 0, FONT_ATLAS_W, FONT_ATLAS_H)
+               mipmapLevel:0 withBytes:atlas bytesPerRow:FONT_ATLAS_W];
 
     // Codepoint -> glyph-array index (fallback '?').
     for (int i = 0; i < 256; i++) s_glyph_index[i] = -1;
-    for (int i = 0; i < OK_FONT_GLYPH_COUNT; i++) {
-        int v = ok_font_glyphs[i].value;
+    for (int i = 0; i < FONT_GLYPH_COUNT; i++) {
+        int v = font_glyphs[i].value;
         if (v >= 0 && v < 256) s_glyph_index[v] = i;
     }
 }
@@ -103,7 +103,7 @@ static int glyph_of(int cp) {
 void gfx_metal_attach(CAMetalLayer* layer) {
     s_device = MTLCreateSystemDefaultDevice();
     s_queue  = [s_device newCommandQueue];
-    s_inflight = dispatch_semaphore_create(OK_INFLIGHT);
+    s_inflight = dispatch_semaphore_create(GFX_INFLIGHT);
     layer.device          = s_device;
     layer.pixelFormat     = MTLPixelFormatBGRA8Unorm;
     layer.framebufferOnly = YES;
@@ -143,8 +143,8 @@ static inline void uv_white(float* u, float* v) {
     // Centre of the forced-opaque bottom-right 8x8 block. Sampling 4px in from
     // the corner keeps the LINEAR footprint entirely inside the white block, so
     // solid fills read coverage 1.0 (a single texel would bleed under linear).
-    *u = (OK_FONT_ATLAS_W - 4.0f) / (float)OK_FONT_ATLAS_W;
-    *v = (OK_FONT_ATLAS_H - 4.0f) / (float)OK_FONT_ATLAS_H;
+    *u = (FONT_ATLAS_W - 4.0f) / (float)FONT_ATLAS_W;
+    *v = (FONT_ATLAS_H - 4.0f) / (float)FONT_ATLAS_H;
 }
 
 static inline void push(float x, float y, float u, float v, Color c) {
@@ -197,7 +197,7 @@ void gfx_end_frame(void) {
 
     dispatch_semaphore_wait(s_inflight, DISPATCH_TIME_FOREVER);
     int fi = s_frame_idx;
-    s_frame_idx = (s_frame_idx + 1) % OK_INFLIGHT;
+    s_frame_idx = (s_frame_idx + 1) % GFX_INFLIGHT;
 
     id<MTLCommandBuffer> cmd = [s_queue commandBuffer];
     __block dispatch_semaphore_t sem = s_inflight;
@@ -242,6 +242,12 @@ void gfx_rect_lines(int x, int y, int w, int h, Color c) {
 
 void gfx_line(int x1, int y1, int x2, int y2, Color c) {
     seg_stroke((float)x1, (float)y1, (float)x2, (float)y2, c);
+}
+
+void gfx_rect_gradient_v(int x, int y, int w, int h, Color top, Color bottom) {
+    float u, v; uv_white(&u, &v);
+    push(x,     y,     u, v, top);    push(x + w, y,     u, v, top);    push(x + w, y + h, u, v, bottom);
+    push(x,     y,     u, v, top);    push(x + w, y + h, u, v, bottom); push(x,     y + h, u, v, bottom);
 }
 
 void gfx_triangle(Vector2 a, Vector2 b, Vector2 c, Color color) {
@@ -349,18 +355,18 @@ void gfx_circle_lines(float cx, float cy, float radius, Color c) {
 // raylib backend uses, so the two platforms lay out identically regardless of
 // each atlas's bake size. Draws each glyph's atlas rect at its offset.
 void gfx_text(const char* text, int x, int y, int font_size, Color c) {
-    float scale = (float)font_size / OK_FONT_BASE_SIZE;
+    float scale = (float)font_size / FONT_BASE_SIZE;
     float spacing = font_size * 0.05f;
     float pen = (float)x;
     for (const unsigned char* p = (const unsigned char*)text; *p; p++) {
         int cp = *p;
-        OKGlyph g = ok_font_glyphs[glyph_of(cp)];
+        FontGlyph g = font_glyphs[glyph_of(cp)];
         if (cp != ' ') {
             float gx = pen + g.ox * scale, gy = y + g.oy * scale;
             float gw = g.rw * scale,       gh = g.rh * scale;
-            float u0 = g.rx / (float)OK_FONT_ATLAS_W, v0 = g.ry / (float)OK_FONT_ATLAS_H;
-            float u1 = (g.rx + g.rw) / (float)OK_FONT_ATLAS_W;
-            float v1 = (g.ry + g.rh) / (float)OK_FONT_ATLAS_H;
+            float u0 = g.rx / (float)FONT_ATLAS_W, v0 = g.ry / (float)FONT_ATLAS_H;
+            float u1 = (g.rx + g.rw) / (float)FONT_ATLAS_W;
+            float v1 = (g.ry + g.rh) / (float)FONT_ATLAS_H;
             push(gx,      gy,      u0, v0, c); push(gx + gw, gy,      u1, v0, c); push(gx + gw, gy + gh, u1, v1, c);
             push(gx,      gy,      u0, v0, c); push(gx + gw, gy + gh, u1, v1, c); push(gx,      gy + gh, u0, v1, c);
         }
@@ -373,11 +379,11 @@ void gfx_text(const char* text, int x, int y, int font_size, Color c) {
 // plus inter-glyph spacing. Matches gfx_text's tracking so centering is correct.
 int gfx_measure_text(const char* text, int font_size) {
     float spacing = font_size * 0.05f;
-    float scale = (float)font_size / OK_FONT_BASE_SIZE;
+    float scale = (float)font_size / FONT_BASE_SIZE;
     float tw = 0.0f;
     int count = 0;
     for (const unsigned char* p = (const unsigned char*)text; *p; p++) {
-        OKGlyph g = ok_font_glyphs[glyph_of(*p)];
+        FontGlyph g = font_glyphs[glyph_of(*p)];
         tw += (g.adv != 0) ? (float)g.adv : (g.rw + g.ox);
         count++;
     }

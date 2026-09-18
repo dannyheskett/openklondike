@@ -1,11 +1,11 @@
-#ifndef OPENKLONDIKE_RECORDER_H
-#define OPENKLONDIKE_RECORDER_H
+#ifndef RECORDER_H
+#define RECORDER_H
 
 #include <stdbool.h>
 #include "platform.h"
 #if !defined(PLATFORM_IOS)
 #include <raylib.h>  // for RenderTexture2D (recorder_capture); absent on iOS
-#endif
+#endif // RECORDER_H
 
 // Frame-fidelity movie recorder. When active, every presented frame is read
 // back from the canvas, converted to YUV, encoded as H.264 (visually
@@ -22,7 +22,7 @@
 // implementation compiles out and these become no-op stubs.
 
 // Start recording to `path`. If `path` is NULL/empty, an auto-named file
-// "openklondike-YYYYMMDD-HHMMSS.mp4" is created in the working directory.
+// "<GAME_NAME>-YYYYMMDD-HHMMSS.mp4" is created in the working directory.
 // Returns true on success. No-op (returns false) if already recording.
 bool recorder_start(const char* path);
 
@@ -40,6 +40,6 @@ bool recorder_active(void);
 // build has no equivalent for; iOS never records.)
 #if !defined(PLATFORM_IOS)
 void recorder_capture(const RenderTexture2D* canvas);
-#endif
+#endif // RECORDER_H
 
-#endif
+#endif // RECORDER_H

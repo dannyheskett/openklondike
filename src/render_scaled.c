@@ -75,8 +75,7 @@ static int stats_h_of(int ref) { return stats_fs_of(ref) * 3 / 2; }
 // only ever fires on Android.
 static int top_bar_of(int ref) {
     int bar = title_bar_of(ref);
-    int cut_top, cut_l, cut_r;
-    safe_area_get(&cut_top, &cut_l, &cut_r);
+    int cut_top = safe_area_get().top;
     return (cut_top > bar) ? cut_top : bar;
 }
 

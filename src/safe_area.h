@@ -1,17 +1,22 @@
-#ifndef OPENKLONDIKE_SAFE_AREA_H
-#define OPENKLONDIKE_SAFE_AREA_H
+#ifndef SAFE_AREA_H
+#define SAFE_AREA_H
 
-// Display-cutout geometry for the top edge, in device pixels. The Android
-// Activity reads the window's DisplayCutout and pushes it here over JNI; the
-// portrait renderer reads it to lay the title bar out around the front camera.
+// Display-cutout and system-bar insets, in device pixels. The Android Activity
+// reads the window insets and pushes them here over JNI; the layout keeps the
+// board clear of them.
 //
-// All outputs are 0 when there is no cutout (and on every non-Android platform,
-// where nothing ever sets them) -- callers then fall back to the plain
-// full-width, centered title bar.
+// All four edges matter because this game rotates: in landscape the camera
+// cutout and the gesture bar move to a side edge, where a top-only inset (what
+// the portrait games in this family carry) would not protect anything.
 //
-//   *top          height to keep clear at the top (safe-inset top)
-//   *cutout_left  left x of the cutout's bounding box
-//   *cutout_right right x of the cutout's bounding box (== left when absent)
-void safe_area_get(int* top, int* cutout_left, int* cutout_right);
+// Every field is 0 when there is no inset, and on every non-Android platform,
+// where nothing sets them: iOS already hands the game a viewport with the safe
+// area subtracted (ios/ios_main.mm), and desktop and web have no insets.
+typedef struct {
+    int top, bottom, left, right;   // safe insets to keep clear
+    int cutout_left, cutout_right;  // top cutout bounding box (== when absent)
+} SafeArea;
 
-#endif // OPENKLONDIKE_SAFE_AREA_H
+SafeArea safe_area_get(void);
+
+#endif // SAFE_AREA_H

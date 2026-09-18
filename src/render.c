@@ -11,6 +11,9 @@
 #include "safe_area.h"
 #include "recorder.h"
 #include "tick.h"   // SIM_HZ: the status clock counts fixed simulation steps
+#include "menu.h"
+#include "present.h"
+#include "window.h"
 #if !defined(PLATFORM_IOS)
 #include <raylib.h>  // window/timing/render textures; absent on iOS
 #include <rlgl.h>
@@ -402,8 +405,8 @@ static void draw_titlebar(const Layout* L) {
     int ty = (L->titlebar_h - fs) / 2;
     int full = gfx_measure_text("OPENKLONDIKE", fs);
 
-    int top, cl, cr;
-    safe_area_get(&top, &cl, &cr);
+    SafeArea sa = safe_area_get();
+    int top = sa.top, cl = sa.cutout_left, cr = sa.cutout_right;
     if (cr <= cl) {
         // No horizontal extent reported. With no top inset either there is no
         // cutout at all -> centred wordmark. If there IS an inset we could not
@@ -557,120 +560,16 @@ static void draw_board(void* vctx, int view_w, int view_h) {
 }
 
 // --------------------------------------------------------------------------
-// Presentation: draw to the window, and (when recording) to a fixed canvas.
-// --------------------------------------------------------------------------
-typedef void (*SceneFn)(void* ctx, int w, int h);
-
-#ifndef OK_TOUCH
-// SSAA factor for the capture path: the frame is drawn at SS× the encoder
-// resolution and minified with bilinear filtering, so the MP4 is anti-aliased
-// to match (and exceed) the window's MSAA.
-#define SS 2
-
-static RenderTexture2D rec_canvas;   // encoder-resolution frame (MIN_W x MIN_H)
-static RenderTexture2D rec_super;    // SS× supersampled scratch frame
-static bool rec_canvas_ready = false;
-#endif
-
-static void emit(SceneFn fn, void* ctx) {
-    gfx_begin_frame();
-    fn(ctx, GetScreenWidth(), GetScreenHeight());
-    gfx_end_frame();
-
-#ifndef OK_TOUCH
-    if (recorder_active() && rec_canvas_ready) {
-        // 1) Draw the scene at SS× into the supersampled texture (the scene uses
-        //    MIN_W/MIN_H coordinates; a scale matrix blows it up to fill).
-        BeginTextureMode(rec_super);
-        rlPushMatrix();
-        rlScalef((float)SS, (float)SS, 1.0f);
-        fn(ctx, MIN_W, MIN_H);
-        rlPopMatrix();
-        EndTextureMode();
-
-        // 2) Minify into the encoder canvas with bilinear filtering (the AA).
-        //    Negative source height flips the bottom-up render texture upright.
-        BeginTextureMode(rec_canvas);
-        Rectangle src = {0, 0, (float)(SS * MIN_W), -(float)(SS * MIN_H)};
-        Rectangle dst = {0, 0, (float)MIN_W, (float)MIN_H};
-        DrawTexturePro(rec_super.texture, src, dst, (Vector2){0, 0}, 0.0f, WHITE);
-        EndTextureMode();
-
-        recorder_capture(&rec_canvas);
-    }
-#endif
-}
-
-// --------------------------------------------------------------------------
 // Lifecycle
 // --------------------------------------------------------------------------
 void render_init(void) {
-#if defined(PLATFORM_IOS)
-    // iOS: UIKit owns the window/surface and drives the loop (CADisplayLink);
-    // the Metal layer is attached separately by the app shell. Nothing to do.
-#else
-#if defined(PLATFORM_ANDROID)
-    // Immersive fullscreen so the app draws under the status bar / camera cutout
-    // (paired with windowLayoutInDisplayCutoutMode=shortEdges in the theme).
-    SetConfigFlags(FLAG_FULLSCREEN_MODE);
-    // Request 0x0: raylib's Android backend then renders at the device's native
-    // resolution. A fixed size here gets aspect-letterboxed into the display.
-    InitWindow(0, 0, "openklondike");
-#elif defined(PLATFORM_WEB)
-    // Let the GL canvas follow the browser viewport (the HTML shell sizes it);
-    // GetScreenWidth/Height then track it so the board re-fits on resize/rotate.
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(MIN_W, MIN_H, "openklondike");
-#else
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
-    InitWindow(MIN_W, MIN_H, "openklondike");
-    // The desktop board is a fixed pixel size, so the window is never allowed
-    // below it -- that is what lets the cards stay unscaled. A browser window
-    // cannot be constrained this way, which is why the layout can also shrink.
-    SetWindowMinSize(MIN_W, MIN_H);
-#endif
-    SetExitKey(KEY_NULL);
-    SetTargetFPS(60);
-    gfx_font_init();   // load the bundled UI font now the GL context exists
-#ifndef OK_TOUCH
-    rec_canvas = LoadRenderTexture(MIN_W, MIN_H);
-    rec_super  = LoadRenderTexture(SS * MIN_W, SS * MIN_H);
-    SetTextureFilter(rec_super.texture, TEXTURE_FILTER_BILINEAR);  // smooth minify
-    rec_canvas_ready = true;
-#endif
-#endif // PLATFORM_IOS
+    window_init(GAME_NAME);
+    present_init();
 }
 
 void render_cleanup(void) {
-#if !defined(PLATFORM_IOS)
-#ifndef OK_TOUCH
-    if (rec_canvas_ready) {
-        UnloadRenderTexture(rec_canvas);
-        UnloadRenderTexture(rec_super);
-        rec_canvas_ready = false;
-    }
-#endif
-    CloseWindow();
-#endif
-}
-
-bool render_window_should_close(void) { return WindowShouldClose(); }
-bool render_window_focused(void)      { return IsWindowFocused(); }
-
-void render_toggle_fullscreen(void) {
-#if defined(PLATFORM_ANDROID) || defined(PLATFORM_IOS) || defined(PLATFORM_WEB)
-    // Mobile apps are always fullscreen, and a browser tab cannot enter
-    // fullscreen without a user gesture the game does not own.
-#else
-    if (IsWindowFullscreen()) {
-        ToggleFullscreen();
-        SetWindowSize(MIN_W, MIN_H);
-    } else {
-        int m = GetCurrentMonitor();
-        SetWindowSize(GetMonitorWidth(m), GetMonitorHeight(m));
-        ToggleFullscreen();
-    }
-#endif
+    present_cleanup();
+    window_close();
 }
 
 // --------------------------------------------------------------------------
@@ -678,135 +577,20 @@ void render_toggle_fullscreen(void) {
 // --------------------------------------------------------------------------
 void render_frame(const Game* g, const DragState* drag) {
     BoardCtx ctx = { g, drag };
-    emit(draw_board, &ctx);
+    present(draw_board, &ctx);
 }
 
-// Menu geometry, scaled off the viewport's short side so the panel is the same
-// proportion of a phone screen as of the 704x704 desktop minimum (where these
-// ratios reproduce the original fixed 400px panel exactly).
-typedef struct {
-    int cx, px, py, panel_w, panel_h;
-    int title_fs, title_y, items_y, line_h, item_fs, pad;
-} MenuLayout;
-
-// Menu geometry. Both boards follow openblocks and openrackem so the three games
-// wear the same furniture.
-//
-//   fixed board   the constants openblocks' landscape menu uses, scaled by the
-//                 same factor the rest of the fixed board is (1.0 at or above
-//                 the minimum window size, smaller only in a browser window
-//                 below it).
-//   scaled board  openblocks' portrait menu: line height h/20, items h/28,
-//                 title h/16, panel 82% of the short screen dimension.
-//
-// The text sizes follow the screen HEIGHT, not the short dimension. On a tall
-// phone the two differ by roughly 2x, which is the difference between a legible
-// menu and an unreadable one.
-static MenuLayout menu_layout(int vw, int vh, int rows) {
-    MenuLayout m;
-    m.cx = vw / 2;
-
-    if (render_use_scaled()) {
-        // Same reference length as the board chrome: the device's long edge, so
-        // the menu is the same physical size upright and sideways. openblocks
-        // uses the view height for these, but it is portrait-locked, where the
-        // two are the same thing.
-        int ref      = (vw > vh) ? vw : vh;
-        m.line_h     = ref / 20;
-        m.item_fs    = ref / 28;
-        m.title_fs   = ref / 16;
-        int base     = (vw < vh) ? vw : vh;   // keep the panel compact in a wide window
-        m.panel_w    = base * 82 / 100;
-        // Shrink the title if it would overrun the panel (wide tablets).
-        while (m.title_fs > 12 &&
-               gfx_measure_text("OPENKLONDIKE", m.title_fs) > m.panel_w - m.line_h) {
-            m.title_fs -= 2;
-        }
-        m.pad        = m.line_h;
-        m.panel_h    = m.title_fs + m.line_h + rows * m.line_h + m.line_h * 2;
-        m.px         = m.cx - m.panel_w / 2;
-        m.py         = (vh - m.panel_h) / 2;
-        m.title_y    = m.py + m.line_h;
-        m.items_y    = m.py + m.line_h + m.title_fs + m.line_h;
-    } else {
-        // The fixed board's own scale factor: 1.0 at or above the minimum window
-        // size, and only smaller in a browser window below it.
-        int shorter = (vw * MIN_H < vh * MIN_W) ? vw : vh;
-        int denom   = (vw * MIN_H < vh * MIN_W) ? MIN_W : MIN_H;
-        if (shorter > denom) { shorter = denom; }
-        m.line_h   = imax(30 * shorter / denom, 10);
-        m.item_fs  = imax(20 * shorter / denom, 8);
-        m.title_fs = imax(44 * shorter / denom, 12);
-        m.pad      = imax(28 * shorter / denom, 8);
-        m.panel_w  = imax(320 * shorter / denom, 160);
-        m.panel_h  = m.title_fs + 40 * shorter / denom + rows * m.line_h
-                   + 60 * shorter / denom;
-        m.px       = m.cx - m.panel_w / 2;
-        m.py       = (vh - m.panel_h) / 2;
-        m.title_y  = m.py + m.pad;
-        m.items_y  = m.py + m.pad + m.title_fs + m.pad;
-    }
-    if (m.py < 0) m.py = 0;
-    if (m.panel_w > vw) m.panel_w = vw;
-    return m;
+// The family menu (menu.c) in this game's colours.
+static MenuTheme menu_theme(void) {
+    MenuTheme t = { .background = FELT, .panel = MENU_BG, .edge = TEXT_DIM,
+                    .title = TEXT_LIGHT, .item = TEXT_DIM, .selected = HILITE };
+    return t;
 }
 
-// Menu item rectangles captured by the last render_menu(), for touch hit
-// testing. Written by draw_menu, read by render_menu_hit_test.
-static Rectangle s_menu_item_rects[8];
-static int s_menu_item_count = 0;
-
-typedef struct {
-    const char* title; const char** labels;
-    int count; int selected; int gap_before;
-} MenuCtx;
-
-static void draw_menu(void* vctx, int view_w, int view_h) {
-    MenuCtx* mc = (MenuCtx*)vctx;
-    gfx_clear(FELT);
-
-    int extra = (mc->gap_before >= 0) ? 1 : 0;
-    MenuLayout m = menu_layout(view_w, view_h, mc->count + extra);
-
-    gfx_rect_rounded(m.px, m.py, m.panel_w, m.panel_h, 0.05f, MENU_BG);
-    gfx_rect_rounded_lines(m.px, m.py, m.panel_w, m.panel_h, 0.05f, TEXT_DIM);
-
-    gfx_text(mc->title, m.cx - gfx_measure_text(mc->title, m.title_fs) / 2,
-             m.title_y, m.title_fs, TEXT_LIGHT);
-
-    s_menu_item_count = (mc->count < 8) ? mc->count : 8;
-    int y = m.items_y;
-    for (int i = 0; i < mc->count; i++) {
-        if (mc->gap_before == i) y += m.line_h;
-        const char* label = mc->labels[i];
-        int lw = gfx_measure_text(label, m.item_fs);
-        Color col = (i == mc->selected) ? HILITE : TEXT_DIM;
-        if (i == mc->selected) {
-            gfx_text(">", m.cx - lw / 2 - m.item_fs * 3 / 2, y, m.item_fs, HILITE);
-            gfx_text("<", m.cx + lw / 2 + m.item_fs / 2, y, m.item_fs, HILITE);
-        }
-        gfx_text(label, m.cx - lw / 2, y, m.item_fs, col);
-        if (i < 8) {
-            // A generous full-width row, so a finger lands on the item and not
-            // between two of them.
-            s_menu_item_rects[i] = (Rectangle){
-                (float)m.px, (float)(y - (m.line_h - m.item_fs) / 2),
-                (float)m.panel_w, (float)m.line_h };
-        }
-        y += m.line_h;
-    }
-}
-
-void render_menu(const char* title, const char** labels, int count,
+void render_menu(const char* title, const char* const* labels, int count,
                  int selected, int gap_before) {
-    MenuCtx ctx = { title, labels, count, selected, gap_before };
-    emit(draw_menu, &ctx);
-}
-
-int render_menu_hit_test(Vector2 p) {
-    for (int i = 0; i < s_menu_item_count; i++)
-        if (CheckCollisionPointRec(p, s_menu_item_rects[i])) return i;
-    return -1;
+    MenuTheme t = menu_theme();
+    menu_show(&t, title, labels, count, selected, gap_before);
 }
 
 // --------------------------------------------------------------------------
@@ -966,17 +750,9 @@ bool render_bounce_step(int steps) {
     DrawTextureRec(B.canvas.texture, src, (Vector2){0, 0}, WHITE);
 #endif
     if (B.done) {
-        MenuLayout m = menu_layout(B.W, B.H, 2);
-        int cx = B.W / 2, cy = B.H / 2;
-        int pw = m.panel_w, ph = m.title_fs + m.item_fs + m.pad * 3;
-        gfx_rect(cx - pw / 2, cy - ph / 2, pw, ph, (Color){0, 0, 0, 190});
-        gfx_rect_lines(cx - pw / 2, cy - ph / 2, pw, ph, TEXT_LIGHT);
-        const char* msg = "YOU WIN";
-        gfx_text(msg, cx - gfx_measure_text(msg, m.title_fs) / 2,
-                 cy - ph / 2 + m.pad, m.title_fs, HILITE);
         const char* sub = render_use_scaled() ? "Tap to continue" : "Press any key";
-        gfx_text(sub, cx - gfx_measure_text(sub, m.item_fs) / 2,
-                 cy - ph / 2 + m.pad * 2 + m.title_fs, m.item_fs, TEXT_DIM);
+        MenuTheme t = menu_theme();
+        menu_draw_notice(&t, B.W, B.H, "YOU WIN", sub);
     }
     gfx_end_frame();
     return B.done;

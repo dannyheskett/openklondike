@@ -25,6 +25,9 @@
 #include "../src/render_fixed.c"
 #include "../src/render_scaled.c"
 #include "../src/safe_area.c"
+#include "../src/menu.c"
+#include "../src/present.c"
+#include "../src/window.c"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,7 +39,7 @@
 // Geometry is all this test cares about, so the primitives are inert and the
 // screen size is scripted. gfx_measure_text returns a plausible proportional
 // width so any centring arithmetic that ran would not divide by zero.
-static int g_screen_w = MIN_W, g_screen_h = MIN_H;
+static int g_screen_w = BOARD_W, g_screen_h = BOARD_H;
 int  GetScreenWidth(void)  { return g_screen_w; }
 int  GetScreenHeight(void) { return g_screen_h; }
 bool IsWindowFocused(void) { return true; }
@@ -80,7 +83,7 @@ static int natural_bottom(const Layout* L, int face_down, int face_up) {
 // only the margins.
 // --------------------------------------------------------------------------
 static void test_fixed_board_never_scales(void) {
-    Layout L = layout_fixed(MIN_W, MIN_H);
+    Layout L = layout_fixed(BOARD_W, BOARD_H);
     if (L.card_w != CARD_W || L.card_h != CARD_H)
         FAIL("fixed_board", "cards are not 80x112 at the minimum size");
     if (L.col_gap != 16 || L.fan_up != 28 || L.fan_down != 12 || L.waste_fan != 24)
@@ -89,7 +92,7 @@ static void test_fixed_board_never_scales(void) {
         FAIL("fixed_board", "bar heights drifted");
     if (L.tab_x[0] != 24)
         FAIL("fixed_board", "the board is not flush against the 24px margin");
-    if (board_right(&L) != MIN_W - 24)
+    if (board_right(&L) != BOARD_W - 24)
         FAIL("fixed_board", "the board does not span the minimum width");
 
     // A bigger window: identical cards, board still centred.
@@ -105,11 +108,11 @@ static void test_fixed_board_never_scales(void) {
 // A browser window is not bound by SetWindowMinSize, so below the minimum the
 // desktop layout shrinks to fit rather than running off the edge.
 static void test_fixed_board_shrinks_below_minimum(void) {
-    Layout L = layout_fixed(MIN_W / 2, MIN_H / 2);
+    Layout L = layout_fixed(BOARD_W / 2, BOARD_H / 2);
     if (L.card_w >= CARD_W) FAIL("fixed_shrink", "cards did not shrink");
-    if (board_right(&L) > MIN_W / 2)
+    if (board_right(&L) > BOARD_W / 2)
         FAIL("fixed_shrink", "the board still overflows the viewport");
-    if (L.tab_y + L.card_h + L.status_h > MIN_H / 2)
+    if (L.tab_y + L.card_h + L.status_h > BOARD_H / 2)
         FAIL("fixed_shrink", "the top row and status bar do not fit");
     PASS("fixed_shrink");
 }
@@ -278,7 +281,7 @@ static void test_touch_board_has_no_bottom_bar(void) {
         FAIL("no_bottom_bar", "the stats band overlaps the wordmark bar");
     if (t.tab_bottom > 2289) FAIL("no_bottom_bar", "the tableau runs off the bottom");
 
-    Layout d = layout_fixed(MIN_W, MIN_H);
+    Layout d = layout_fixed(BOARD_W, BOARD_H);
     if (d.status_h <= 0) FAIL("no_bottom_bar", "the desktop board lost its status bar");
     PASS("no_bottom_bar");
 }
@@ -367,15 +370,15 @@ static void test_scaled_board_clears_a_display_cutout(void) {
     Layout plain = layout_scaled(1080, 2400);
     // safe_area.c has no setter off Android; the tests reach its state directly,
     // which is the point of including the translation unit.
-    s_top = 140;
-    s_cutout_left = 460;
-    s_cutout_right = 620;
+    s_area.top = 140;
+    s_area.cutout_left = 460;
+    s_area.cutout_right = 620;
     Layout notched = layout_scaled(1080, 2400);
     if (notched.titlebar_h < 140)
         FAIL("scaled_cutout", "the title bar does not clear the safe inset");
     if (notched.stock_y <= plain.stock_y)
         FAIL("scaled_cutout", "the board was not pushed below the cutout");
-    s_top = s_cutout_left = s_cutout_right = 0;
+    s_area = (SafeArea){0};
     PASS("scaled_cutout");
 }
 
@@ -394,7 +397,7 @@ static void deep_column(Pile* p) {
 
 static void test_deep_column_stays_on_screen(void) {
     const struct { int w, h; bool scaled; const char* name; } cases[] = {
-        { MIN_W, MIN_H, false, "desktop minimum" },
+        { BOARD_W, BOARD_H, false, "desktop minimum" },
         { 1600, 1000,   false, "desktop maximised" },
         { 1080, 2400,   true,  "phone" },
         {  720, 1280,   true,  "small phone" },
@@ -452,7 +455,7 @@ static void probe(const Game* g, const Layout* L, PileKind kind, int index, int 
 
 static void test_hit_testing_round_trips(void) {
     const struct { int w, h; bool scaled; const char* name; } cases[] = {
-        { MIN_W, MIN_H, false, "desktop minimum" },
+        { BOARD_W, BOARD_H, false, "desktop minimum" },
         { 1600, 1000,   false, "desktop maximised" },
         { 1080, 2400,   true,  "phone" },
         { 1536, 2048,   true,  "tablet" },

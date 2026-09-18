@@ -160,7 +160,7 @@ static void poll_touch(Input* in) {
                 in->any_pressed    = true;
             }
         } else if (dur < TAP_MAX_SECONDS && s_touch.travel <= tap_slop()) {
-            in->tap        = true;
+            in->touch_tap        = true;
             in->tap_x      = s_touch.last.x;
             in->tap_y      = s_touch.last.y;
             in->any_pressed = true;

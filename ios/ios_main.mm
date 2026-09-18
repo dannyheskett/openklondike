@@ -1,6 +1,6 @@
 // iOS app shell: a UIKit application hosting a CAMetalLayer view driven by a
 // CADisplayLink. No Storyboard, no scene manifest — a classic AppDelegate
-// window. The display link runs the shared game loop (ok_app_frame); touches and
+// window. The display link runs the shared game loop (app_frame); touches and
 // gesture recognizers feed the platform layer (plat_ios) that the game polls.
 #import <UIKit/UIKit.h>
 
@@ -27,7 +27,7 @@
     self.multipleTouchEnabled = YES;
     gfx_metal_attach((CAMetalLayer*)self.layer);
     [self updateDrawableSize];
-    ok_app_init();
+    app_init();
 
     // Gesture recognizers (don't swallow the raw touches the game also reads).
     UITapGestureRecognizer* tap =
@@ -89,7 +89,7 @@
     plat_ios_set_screen((int)sw, (int)sh);
 }
 
-- (void)onFrame:(CADisplayLink*)link { (void)link; ok_app_frame(); }
+- (void)onFrame:(CADisplayLink*)link { (void)link; app_frame(); }
 
 // --- Touches: publish the set of active points (in drawable pixels). --------
 - (void)publishTouches:(UIEvent*)event {

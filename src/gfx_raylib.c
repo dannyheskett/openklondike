@@ -18,9 +18,9 @@
 // direct raylib calls used and is smooth at every card size the game reaches.
 #define GFX_ROUND_SEGMENTS 6
 
-// Bake the glyph atlas well above the largest on-screen size (menu titles reach
-// ~46px) so every draw downsamples -- crisp with bilinear filtering.
-#define GFX_FONT_BAKE 64
+// Bake the glyph atlas at the same size as the iOS atlas (font_atlas.h) so text
+// looks the same on every platform and large menu titles stay crisp.
+#define GFX_FONT_BAKE 96
 
 static Font s_font;
 static bool s_font_ready = false;
@@ -52,6 +52,10 @@ void gfx_rect_lines(int x, int y, int w, int h, Color color) {
 }
 void gfx_line(int x1, int y1, int x2, int y2, Color color) {
     DrawLine(x1, y1, x2, y2, color);
+}
+
+void gfx_rect_gradient_v(int x, int y, int w, int h, Color top, Color bottom) {
+    DrawRectangleGradientV(x, y, w, h, top, bottom);
 }
 
 void gfx_rect_rounded(int x, int y, int w, int h, float roundness, Color color) {

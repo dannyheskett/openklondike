@@ -16,7 +16,7 @@ MINIMP4_INC  := third_party/minimp4
 
 SRC := src/main.c src/game.c src/tick.c src/input.c \
        src/render.c src/render_fixed.c src/render_scaled.c src/gfx_raylib.c \
-       src/safe_area.c \
+       src/safe_area.c src/menu.c src/present.c src/window.c \
        src/sound.c src/audio_raylib.c \
        src/recorder.c src/encode_h264.c src/encode_mux.c
 
@@ -385,7 +385,8 @@ IOS_TEAM_ID       ?=
 # are replaced by the ios/ backends, so they are not in this list.
 IOS_C_SRC      := src/main.c src/game.c src/tick.c src/input.c \
                   src/render.c src/render_fixed.c src/render_scaled.c \
-                  src/safe_area.c src/sound.c src/recorder.c
+                  src/safe_area.c src/menu.c src/present.c src/window.c \
+                  src/sound.c src/recorder.c
 IOS_MM_SRC     := ios/ios_main.mm ios/gfx_metal.mm ios/plat_ios.mm ios/audio_ios.mm
 IOS_CFLAGS     := -std=c99   -Wall -Wextra -Isrc -Iios -DPLATFORM_IOS -O2
 IOS_MMFLAGS    := -std=c++14 -fobjc-arc -Wall -Wextra -Isrc -Iios -DPLATFORM_IOS -O2
@@ -500,21 +501,29 @@ $(IOS_IPA): $(IOS_DEPS)
 #   test_input  — input.c's touch-gesture recognizer, driven frame-by-frame
 #                 through a scripted touch surface. It is the same C every touch
 #                 platform compiles.
+#   test_menu   — the family menu (menu.c, identical in every game): it fits
+#                 every view shape, keeps its size on rotation, grows with the
+#                 window, and a pointer picks the row under it.
 # ---------------------------------------------------------------------------
 TEST_BIN        := build/test_game
 TEST_LAYOUT_BIN := build/test_layout
 TEST_INPUT_BIN  := build/test_input
+TEST_MENU_BIN   := build/test_menu
 
-test: $(TEST_BIN) $(TEST_LAYOUT_BIN) $(TEST_INPUT_BIN)
+test: $(TEST_BIN) $(TEST_LAYOUT_BIN) $(TEST_INPUT_BIN) $(TEST_MENU_BIN)
 	./$(TEST_BIN)
 	./$(TEST_LAYOUT_BIN)
 	./$(TEST_INPUT_BIN)
+	./$(TEST_MENU_BIN)
 
 $(TEST_BIN): tests/test_game.c $(wildcard src/*.c src/*.h) | $(OBJ_DIR)
 	gcc $(CFLAGS_COMMON) -O0 -g tests/test_game.c -o $(TEST_BIN) -lm
 
 $(TEST_LAYOUT_BIN): tests/test_layout.c $(wildcard src/*.c src/*.h) | $(OBJ_DIR)
 	gcc $(CFLAGS_COMMON) -O0 -g tests/test_layout.c -o $(TEST_LAYOUT_BIN) -lm
+
+$(TEST_MENU_BIN): tests/test_menu.c $(wildcard src/*.c src/*.h) | $(OBJ_DIR)
+	gcc $(CFLAGS_COMMON) -O0 -g tests/test_menu.c -o $(TEST_MENU_BIN) -lm
 
 $(TEST_INPUT_BIN): tests/test_input.c $(wildcard src/*.c src/*.h) | $(OBJ_DIR)
 	gcc $(CFLAGS_COMMON) -O0 -g -DPLATFORM_IOS tests/test_input.c -o $(TEST_INPUT_BIN) -lm

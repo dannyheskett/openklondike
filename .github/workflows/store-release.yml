@@ -1,0 +1,225 @@
+name: store-release
+
+# Push listing copy, screenshots and a chosen build to Google Play and the App
+# Store, from one dispatch, in the same shape for both stores.
+#
+# This is deliberately NOT part of release.yml. That workflow runs on every merge
+# to main and ends at the GitHub Release plus an upload to the Play internal
+# track and to TestFlight -- both places where only the maintainer looks. Putting
+# a build in front of the public is a decision, not a consequence of merging, so
+# it is a manual dispatch with dry_run defaulted on.
+#
+# What this cannot do, because neither store exposes an API for it (one-time
+# console work, not per-release):
+#   Play  -- Data safety form, IARC content rating, target-audience declaration,
+#            and the 12-tester/14-day closed-testing gate for production access.
+#   Apple -- the App Privacy nutrition label.
+#
+# The build must already be uploaded: release.yml sends the AAB to the Play
+# internal track and the .ipa to App Store Connect on every merge. This workflow
+# promotes what is there, it does not build or upload anything.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: 'Release number to ship (blank = the newest release-N tag)'
+        type: string
+        default: ''
+      platform:
+        description: 'Which stores to touch'
+        type: choice
+        options: [both, android, ios]
+        default: both
+      push_listing:
+        description: 'Push listing text + screenshots from the repo'
+        type: boolean
+        default: true
+      android_track:
+        description: 'Play track to release onto'
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      rollout:
+        description: 'Play staged rollout fraction, e.g. 0.2 (blank = full release)'
+        type: string
+        default: ''
+      submit_for_review:
+        description: 'Apple: send the version to App Review'
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Print every API call and change nothing'
+        type: boolean
+        default: true
+
+# No write access to the repo is needed: this only talks to the two stores.
+permissions:
+  contents: read
+
+# Serialised against itself. Two concurrent edits of the same Play listing would
+# have one clobber the other, and Apple rejects a second review submission while
+# one is open.
+concurrency:
+  group: store-release
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: resolve the build number
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.pick.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: pick
+        env:
+          REQUESTED: ${{ inputs.build }}
+        run: |
+          set -euo pipefail
+          if [ -n "$REQUESTED" ]; then
+            build="$REQUESTED"
+          else
+            build=$(git tag --list 'release-*' \
+                      | sed -n 's/^release-\([1-9][0-9]*\)$/\1/p' \
+                      | sort -n | tail -1)
+          fi
+          case "$build" in
+            ''|*[!0-9]*) echo "::error::'$build' is not a release number"; exit 1 ;;
+          esac
+          # A tag must exist for it: the number is also the Play versionCode and
+          # Apple's CFBundleVersion, so a typo here would target a build that was
+          # never produced.
+          git rev-parse -q --verify "refs/tags/release-$build" >/dev/null \
+            || { echo "::error::no release-$build tag"; exit 1; }
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "Shipping release-$build"
+
+  play:
+    name: Google Play
+    needs: resolve
+    if: ${{ inputs.platform == 'both' || inputs.platform == 'android' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the JWT dependency
+        run: python3 -m pip install --quiet cryptography
+      # Secrets cannot be used in `if:`, so probe once into an output. A missing
+      # credential is reported plainly instead of failing inside the script.
+      - name: Gate on the service-account secret
+        id: gate
+        env:
+          SA: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -n "$SA" ]; then echo "go=true" >> "$GITHUB_OUTPUT";
+          else echo "go=false" >> "$GITHUB_OUTPUT"; echo "No PLAY_SERVICE_ACCOUNT_JSON; skipping."; fi
+      - name: Validate the listing files
+        if: steps.gate.outputs.go == 'true'
+        run: python3 scripts/store_listing.py --check
+      - name: Push the store listing
+        if: steps.gate.outputs.go == 'true' && inputs.push_listing
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(listing)
+          if [ "$DRY" = "true" ]; then args+=(--dry-run); fi
+          python3 scripts/play_release.py "${args[@]}"
+      - name: Release onto the chosen track
+        if: steps.gate.outputs.go == 'true'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          BUILD: ${{ needs.resolve.outputs.build }}
+          TRACK: ${{ inputs.android_track }}
+          ROLLOUT: ${{ inputs.rollout }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(release --build "$BUILD" --track "$TRACK")
+          if [ -n "$ROLLOUT" ]; then args+=(--rollout "$ROLLOUT"); fi
+          if [ "$DRY" = "true" ]; then args+=(--dry-run); fi
+          python3 scripts/play_release.py "${args[@]}"
+      - name: Show what is on each track now
+        if: steps.gate.outputs.go == 'true'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: python3 scripts/play_release.py status
+
+  asc:
+    name: App Store
+    needs: resolve
+    if: ${{ inputs.platform == 'both' || inputs.platform == 'ios' }}
+    # Linux, not macOS: the metadata and review-submission APIs are pure REST.
+    # Only the .ipa upload itself needs Xcode, and release.yml already did that.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install the JWT dependency
+        run: python3 -m pip install --quiet cryptography
+      - name: Gate on the API-key secrets
+        id: gate
+        env:
+          K: ${{ secrets.ASC_KEY_P8 }}
+          I: ${{ secrets.ASC_KEY_ID }}
+          S: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          if [ -n "$K" ] && [ -n "$I" ] && [ -n "$S" ]; then echo "go=true" >> "$GITHUB_OUTPUT";
+          else echo "go=false" >> "$GITHUB_OUTPUT"; echo "No ASC_* secrets; skipping."; fi
+      - name: Validate the listing files
+        if: steps.gate.outputs.go == 'true'
+        run: python3 scripts/store_listing.py --check
+      # Order matters, and it is the reverse of Play's. Apple hangs the listing
+      # off a VERSION record, so the version has to exist before there is
+      # anything to write the description and screenshots onto -- hence release
+      # first (without --submit), then listing, then the submit pass.
+      - name: Create the version and attach the build
+        if: steps.gate.outputs.go == 'true'
+        env:
+          ASC_KEY_P8:    ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUILD: ${{ needs.resolve.outputs.build }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(release --build "$BUILD")
+          if [ "$DRY" = "true" ]; then args+=(--dry-run); fi
+          python3 scripts/asc_release.py "${args[@]}"
+      - name: Push the store listing
+        if: steps.gate.outputs.go == 'true' && inputs.push_listing
+        env:
+          ASC_KEY_P8:    ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(listing)
+          if [ "$DRY" = "true" ]; then args+=(--dry-run); fi
+          python3 scripts/asc_release.py "${args[@]}"
+      - name: Submit for review
+        if: steps.gate.outputs.go == 'true' && inputs.submit_for_review
+        env:
+          ASC_KEY_P8:    ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          BUILD: ${{ needs.resolve.outputs.build }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          args=(release --build "$BUILD" --submit)
+          if [ "$DRY" = "true" ]; then args+=(--dry-run); fi
+          python3 scripts/asc_release.py "${args[@]}"
+      - name: Show the current version state
+        if: steps.gate.outputs.go == 'true'
+        env:
+          ASC_KEY_P8:    ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID:    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: python3 scripts/asc_release.py status

@@ -33,6 +33,11 @@ jobs:
         run: make test
       - name: Build dev + release
         run: make all release
+      # Catch a renamed heading, a missing block, an over-length field or a
+      # banned term here rather than half way through an edit against a live
+      # store. Pure stdlib, so it costs nothing and needs no extra deps.
+      - name: Validate the store listing files
+        run: python3 scripts/store_listing.py --check
 
   windows:
     runs-on: ubuntu-22.04

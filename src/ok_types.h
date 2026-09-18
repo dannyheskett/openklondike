@@ -1,5 +1,5 @@
-#ifndef OPENKLONDIKE_OK_TYPES_H
-#define OPENKLONDIKE_OK_TYPES_H
+#ifndef OK_TYPES_H_INCLUDED
+#define OK_TYPES_H_INCLUDED
 
 // Geometry / colour types and the handful of raylib query functions the shared
 // game code uses, decoupled from raylib so the iOS build (which links no raylib)
@@ -71,4 +71,4 @@ bool    WindowShouldClose(void);
 
 #endif // PLATFORM_IOS
 
-#endif // OPENKLONDIKE_OK_TYPES_H
+#endif // OK_TYPES_H_INCLUDED

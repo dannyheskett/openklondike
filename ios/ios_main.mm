@@ -9,13 +9,13 @@
 #import "gfx_metal.h"
 #import "plat_ios.h"
 
-@interface OKMetalView : UIView
+@interface MetalView : UIView
 @property (nonatomic) BOOL started;
 @property (nonatomic) NSInteger originX; // safe-area left inset, pixels
 @property (nonatomic) NSInteger originY; // safe-area top inset, pixels
 @end
 
-@implementation OKMetalView
+@implementation MetalView
 
 + (Class)layerClass { return [CAMetalLayer class]; }
 
@@ -75,7 +75,7 @@
 
     // Draw inside the safe area: the game's (0,0)..(w,h) maps to the region
     // between the notch/Dynamic Island and the home indicator. The area outside
-    // clears to black, which matches the game background, so it's seamless.
+    // clears to the frame's gfx_clear colour, so it's seamless.
     UIEdgeInsets ins = self.safeAreaInsets;
     NSInteger ox = (NSInteger)(ins.left * scale);
     NSInteger oy = (NSInteger)(ins.top  * scale);
@@ -133,7 +133,7 @@
     CGRect bounds = [UIScreen mainScreen].bounds;
     self.window = [[UIWindow alloc] initWithFrame:bounds];
     UIViewController* vc = [[UIViewController alloc] init];
-    vc.view = [[OKMetalView alloc] initWithFrame:bounds];
+    vc.view = [[MetalView alloc] initWithFrame:bounds];
     self.window.rootViewController = vc;
     [self.window makeKeyAndVisible];
 

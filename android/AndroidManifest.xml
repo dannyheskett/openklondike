@@ -13,7 +13,7 @@
     <!-- versionCode/versionName are intentionally absent: aapt/aapt2
          - -version-code/- -version-name only inject when the manifest has none,
          so hardcoding them here would silently pin every Play upload to 1. -->
-    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="36" />
 
     <uses-feature android:glEsVersion="0x00020000" android:required="true" />
 

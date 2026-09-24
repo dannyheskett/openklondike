@@ -16,7 +16,7 @@ Pick a 120 Hz device (DEVICEFARM_DEVICE_MODEL) to exercise the high-refresh
 path; the report states the render rate actually observed either way.
 
 Config via env (no ARNs are hard-coded, so this file is safe to commit):
-  DEVICEFARM_PROJECT_ARN     required  the Device Farm project ARN
+  AWS_DEVICEFARM_ARN     required  the Device Farm project ARN
   APP_PATH                   required  path to the .apk or .ipa to test
   DEVICEFARM_UPLOAD_ONLY     optional  "1" to stop after upload (free; no devices)
   DEVICEFARM_MAX_DEVICES     optional  device count for the run (default 1)
@@ -35,7 +35,7 @@ import urllib.request
 import boto3
 
 REGION = os.environ.get("AWS_REGION", "us-west-2")
-PROJECT = os.environ["DEVICEFARM_PROJECT_ARN"]
+PROJECT = os.environ["AWS_DEVICEFARM_ARN"]
 APP_PATH = os.environ["APP_PATH"]
 UPLOAD_ONLY = os.environ.get("DEVICEFARM_UPLOAD_ONLY") == "1"
 MAX_DEVICES = int(os.environ.get("DEVICEFARM_MAX_DEVICES", "1"))

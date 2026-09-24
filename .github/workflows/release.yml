@@ -287,8 +287,6 @@ jobs:
     timeout-minutes: 10
     env:
       NDK_VERSION: "26.3.11579264"
-      ANDROID_BUILD_TOOLS: "35.0.0"
-      ANDROID_PLATFORM_VER: "35"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -297,6 +295,16 @@ jobs:
           java-version: '17'
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+      # targetSdkVersion in android/AndroidManifest.xml is the single source for
+      # the SDK this builds against. Both values were hardcoded here and drifted:
+      # release.yml and devicefarm.yml disagreed inside the same repo, and this
+      # value, not the Makefile's, is what reaches aapt.
+      - name: Read the SDK version from the manifest
+        run: |
+          T=$(sed -n 's/.*targetSdkVersion="\([0-9]*\)".*/\1/p' android/AndroidManifest.xml)
+          [ -n "$T" ] || { echo "no targetSdkVersion in android/AndroidManifest.xml"; exit 1; }
+          echo "ANDROID_PLATFORM_VER=$T"    >> "$GITHUB_ENV"
+          echo "ANDROID_BUILD_TOOLS=$T.0.0" >> "$GITHUB_ENV"
       - name: Install NDK + build-tools + platform
         run: |
           sdkmanager --install "ndk;${NDK_VERSION}" \
@@ -319,11 +327,10 @@ jobs:
         id: playsecret
         env:
           K:  ${{ secrets.PLAY_UPLOAD_KEYSTORE }}
-          A:  ${{ secrets.PLAY_KEY_ALIAS }}
           SP: ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
           KP: ${{ secrets.PLAY_KEY_PASSWORD }}
         run: |
-          if [ -n "$K" ] && [ -n "$A" ] && [ -n "$SP" ] && [ -n "$KP" ]; then
+          if [ -n "$K" ] && [ -n "$SP" ] && [ -n "$KP" ]; then
             echo "present=true"  >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
@@ -332,7 +339,6 @@ jobs:
         if: steps.playsecret.outputs.present == 'true'
         env:
           PLAY_UPLOAD_KEYSTORE:    ${{ secrets.PLAY_UPLOAD_KEYSTORE }}
-          PLAY_KEY_ALIAS:          ${{ secrets.PLAY_KEY_ALIAS }}
           PLAY_KEYSTORE_PASSWORD:  ${{ secrets.PLAY_KEYSTORE_PASSWORD }}
           PLAY_KEY_PASSWORD:       ${{ secrets.PLAY_KEY_PASSWORD }}
         run: |
@@ -342,7 +348,6 @@ jobs:
             ANDROID_PLATFORM_VER="${ANDROID_PLATFORM_VER}" \
             RELEASE_VERSION=${{ needs.prepare.outputs.version }} \
             PLAY_KEYSTORE="$RUNNER_TEMP/upload.jks" \
-            PLAY_KEY_ALIAS="$PLAY_KEY_ALIAS" \
             PLAY_STORE_PASS="$PLAY_KEYSTORE_PASSWORD" \
             PLAY_KEY_PASS="$PLAY_KEY_PASSWORD"
       # The AAB is only built and uploaded as an artifact here. The push to Play happens in

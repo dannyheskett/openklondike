@@ -18,7 +18,6 @@ which is why --dry-run stops before the commit rather than before the changes.
 
 Credentials, first one set wins:
   $PLAY_SERVICE_ACCOUNT_JSON   the service-account JSON *content* (CI)
-  $PLAY_PUBLISHER_KEY          path to the service-account JSON
   ~/.config/openklondike/play-publisher.json
 
 Usage:
@@ -72,15 +71,17 @@ IMAGES = {
 
 
 def load_credential():
+    """The service-account JSON itself, from $PLAY_SERVICE_ACCOUNT_JSON.
+
+    One source, no fallback. A path on the developer's disk used to be tried
+    next, so a run with the secret missing could still find some other key
+    lying around and publish with it. Publishing is not a place to guess at
+    credentials: either the variable is set, or this aborts.
+    """
     raw = os.environ.get("PLAY_SERVICE_ACCOUNT_JSON")
-    if raw:
-        return json.loads(raw)
-    path = os.environ.get("PLAY_PUBLISHER_KEY") or os.path.expanduser(
-        "~/.config/openklondike/play-publisher.json")
-    if not os.path.exists(path):
-        sys.exit(f"no Play credential: set $PLAY_SERVICE_ACCOUNT_JSON or put a key at {path}")
-    with open(path) as f:
-        return json.load(f)
+    if not raw:
+        sys.exit("PLAY_SERVICE_ACCOUNT_JSON is not set")
+    return json.loads(raw)
 
 
 def access_token(sa):

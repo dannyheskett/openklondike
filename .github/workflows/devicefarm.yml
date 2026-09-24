@@ -15,7 +15,7 @@ name: devicefarm
 # scripts/devicefarm_run.py is carried verbatim, so its SIMSTATS branch is still there;
 # it is opt-in via DEVICEFARM_CHECK_SIMSTATS, which this workflow never sets.
 #
-# Requires the AWS_ROLE_ARN and DEVICEFARM_PROJECT_ARN secrets. Neither is configured yet,
+# Requires the AWS_ROLE_ARN and AWS_DEVICEFARM_ARN secrets. Neither is configured yet,
 # so this workflow is here and ready rather than in use.
 on:
   workflow_dispatch:
@@ -35,6 +35,10 @@ permissions:
   id-token: write   # mint the OIDC token to assume the AWS role
   contents: read
 
+env:
+  # One region for every AWS step in this file.
+  AWS_REGION: us-west-2
+
 jobs:
   android:
     name: build APK + Device Farm fuzz (Android)
@@ -43,8 +47,6 @@ jobs:
     timeout-minutes: 45
     env:
       NDK_VERSION: "26.3.11579264"
-      ANDROID_BUILD_TOOLS: "35.0.0"
-      ANDROID_PLATFORM_VER: "35"
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -53,6 +55,16 @@ jobs:
           java-version: '17'
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+      # targetSdkVersion in android/AndroidManifest.xml is the single source for
+      # the SDK this builds against. Both values were hardcoded here and drifted:
+      # release.yml and devicefarm.yml disagreed inside the same repo, and this
+      # value, not the Makefile's, is what reaches aapt.
+      - name: Read the SDK version from the manifest
+        run: |
+          T=$(sed -n 's/.*targetSdkVersion="\([0-9]*\)".*/\1/p' android/AndroidManifest.xml)
+          [ -n "$T" ] || { echo "no targetSdkVersion in android/AndroidManifest.xml"; exit 1; }
+          echo "ANDROID_PLATFORM_VER=$T"    >> "$GITHUB_ENV"
+          echo "ANDROID_BUILD_TOOLS=$T.0.0" >> "$GITHUB_ENV"
       - name: Install NDK + build-tools + platform
         run: |
           sdkmanager --install "ndk;${NDK_VERSION}" \
@@ -70,10 +82,10 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
+          aws-region: ${{ env.AWS_REGION }}
       - name: Device Farm fuzz test
         env:
-          DEVICEFARM_PROJECT_ARN: ${{ secrets.DEVICEFARM_PROJECT_ARN }}
+          AWS_DEVICEFARM_ARN: ${{ secrets.AWS_DEVICEFARM_ARN }}
           APP_PATH: build/${{ github.event.repository.name }}.apk
           DEVICEFARM_MAX_DEVICES: ${{ inputs.max_devices }}
           DEVICEFARM_ARTIFACT_DIR: devicefarm-artifacts
@@ -109,10 +121,10 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-2
+          aws-region: ${{ env.AWS_REGION }}
       - name: Device Farm fuzz test
         env:
-          DEVICEFARM_PROJECT_ARN: ${{ secrets.DEVICEFARM_PROJECT_ARN }}
+          AWS_DEVICEFARM_ARN: ${{ secrets.AWS_DEVICEFARM_ARN }}
           APP_PATH: build/${{ github.event.repository.name }}.ipa
           DEVICEFARM_MAX_DEVICES: ${{ inputs.max_devices }}
           DEVICEFARM_ARTIFACT_DIR: devicefarm-artifacts

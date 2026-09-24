@@ -137,10 +137,14 @@ $(OUT_MAC): $(MAC_OBJ)
 #
 # Requires env: ANDROID_NDK, ANDROID_SDK_ROOT.
 # ---------------------------------------------------------------------------
-ANDROID_API          ?= 24
+# minSdk/targetSdk live in android/AndroidManifest.xml, which is the single
+# source: aapt (APK) and aapt2 (AAB) both read it directly, and aapt2 silently
+# ignores --target-sdk-version when the manifest already carries one. These two
+# read it back, so the compile target cannot drift from what ships.
+ANDROID_API          ?= $(shell sed -n 's/.*minSdkVersion="\([0-9]*\)".*/\1/p' android/AndroidManifest.xml)
 ANDROID_ABI          := arm64-v8a
-ANDROID_BUILD_TOOLS  ?= 35.0.0
-ANDROID_PLATFORM_VER ?= 35
+ANDROID_BUILD_TOOLS  ?= $(ANDROID_PLATFORM_VER).0.0
+ANDROID_PLATFORM_VER ?= $(shell sed -n 's/.*targetSdkVersion="\([0-9]*\)".*/\1/p' android/AndroidManifest.xml)
 
 # versionCode must be a monotonically increasing integer for Play uploads; drive
 # it off the release number (unique + monotonic). Clamp to >=1 for local builds
@@ -185,6 +189,10 @@ ANDROID_OBJ     := $(ANDROID_SRC:src/%.c=$(ANDROID_OBJ_DIR)/%.o) \
                    $(ANDROID_OBJ_DIR)/native_app_glue.o
 
 ANDROID_APK_DIR  := build/android
+# The app's own name: the .so, the debug-keystore alias and the Play upload
+# alias all derive from it, so it is written once here.
+ANDROID_APP_NAME := openklondike
+
 ANDROID_LIB      := $(ANDROID_APK_DIR)/lib/$(ANDROID_ABI)/libopenklondike.so
 ANDROID_APK      := build/openklondike.apk
 ANDROID_KEYSTORE ?= build/debug.keystore
@@ -228,7 +236,7 @@ $(ANDROID_DEX): $(ANDROID_JAVA_SRC)
 $(ANDROID_KEYSTORE):
 	@mkdir -p $(dir $@)
 	keytool -genkeypair -keystore $@ -storepass android -keypass android \
-	    -alias openklondike -keyalg RSA -keysize 2048 -validity 10000 \
+	    -alias $(PLAY_KEYSTORE_ALIAS) -keyalg RSA -keysize 2048 -validity 10000 \
 	    -dname "CN=openklondike, O=openklondike, C=US"
 
 $(ANDROID_APK): $(ANDROID_LIB) $(ANDROID_DEX) $(ANDROID_KEYSTORE) \
@@ -271,7 +279,7 @@ BUNDLETOOL         ?= build/bundletool.jar
 BUNDLETOOL_SHA256  ?= 2d4ad908faea64047c1cc9cb747e6aa667c6ab192e09607bd16b67246a8cd6ae
 
 PLAY_KEYSTORE   ?= $(ANDROID_KEYSTORE)
-PLAY_KEY_ALIAS  ?= openklondike
+PLAY_KEYSTORE_ALIAS  ?= $(ANDROID_APP_NAME)-upload
 PLAY_STORE_PASS ?= android
 PLAY_KEY_PASS   ?= android
 
@@ -315,7 +323,7 @@ $(ANDROID_AAB): $(ANDROID_LIB) $(ANDROID_DEX) $(BUNDLETOOL) $(PLAY_KEYSTORE) \
 	# Sign the bundle (JAR signature) with the upload key.
 	@jarsigner -keystore $(PLAY_KEYSTORE) -storepass:env PLAY_STORE_PASS_ENV \
 	    -keypass:env PLAY_KEY_PASS_ENV -sigalg SHA256withRSA -digestalg SHA-256 \
-	    $@ $(PLAY_KEY_ALIAS)
+	    $@ $(PLAY_KEYSTORE_ALIAS)
 	@echo "[android] built $@ (versionCode $(ANDROID_VERSION_CODE), versionName $(ANDROID_VERSION_NAME))"
 
 # ---------------------------------------------------------------------------

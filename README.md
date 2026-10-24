@@ -141,8 +141,8 @@ make ios-sim   # -> build/ios-sim/Openklondike.app   (Simulator, arm64)
 make ios       # -> build/openklondike.ipa           (device arm64, unsigned)
 ```
 
-The `.ipa` is unsigned; AWS Device Farm re-signs it on upload, and Sideloadly /
-a free Apple ID can install it on a device. C sources build with `clang`, the
+The `.ipa` is unsigned unless `IOS_SIGN_IDENTITY` / `IOS_PROFILE` / `IOS_TEAM_ID`
+are set; AWS Device Farm re-signs an unsigned one on upload. C sources build with `clang`, the
 Objective-C++ backend (`ios/`) with `clang++`.
 
 ### Web (needs Emscripten)
@@ -188,15 +188,12 @@ All checks must pass to merge.
 
 Pushing to `main` cuts the next `release-N` via
 [`release.yml`](.github/workflows/release.yml), which attaches per-platform
-archives, the Android APK, the iOS `.ipa`, and the WASM bundle to the GitHub
-Release.
-
-The store uploads (Play internal track, TestFlight) are wired up but dormant:
-each gates on its own secrets, none of which are configured, so today they
-report "skipping" and the release still ships the sideload APK and the unsigned
-`.ipa`. See [`android/play-assets/KEYSTORE.md`](android/play-assets/KEYSTORE.md)
-and [`ios/app-store-assets/TESTFLIGHT.md`](ios/app-store-assets/TESTFLIGHT.md)
-for the step-by-step on turning each one on.
+archives, the Android APK and AAB, the iOS `.ipa` and the WASM bundle to the
+GitHub Release; when the store secrets are set it also uploads the AAB to the
+Play internal track, uploads the `.ipa` to TestFlight and submits it to App
+Review. Setup:
+[`android/play-assets/KEYSTORE.md`](android/play-assets/KEYSTORE.md) and
+[`ios/app-store-assets/TESTFLIGHT.md`](ios/app-store-assets/TESTFLIGHT.md).
 
 ## Recording (desktop only)
 

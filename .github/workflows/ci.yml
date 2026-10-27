@@ -176,7 +176,9 @@ jobs:
 
   ios:
     runs-on: macos-26
-    timeout-minutes: 10
+    # Normal runs take about 4-9 min; 10 cancelled runs whose every step passed
+    # on a slow macOS runner. 20 still stops a hung job.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - name: Build iOS Simulator app (native Metal, no raylib)

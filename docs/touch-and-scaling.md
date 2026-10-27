@@ -123,11 +123,3 @@ remainder, and drops the backlog after five steps so a backgrounded tab skips
 ahead rather than spiralling. `tests/test_game.c` asserts 60 steps per second at
 30, 60 and 120 Hz. The same accumulator drives the win cascade, so the trail
 density is refresh-rate independent.
-
-## Not shared with openblocks
-
-openblocks validates its fixed timestep on hardware with a `SIMSTATS=1` build
-that boots into autoplay and logs frames-vs-steps to logcat. A falling-block
-game plays itself under gravity; solitaire cannot without a solver. There is no
-equivalent build here, the `devicefarm` workflow omits the `simstats` input, and
-the unit tests over `src/tick.c` cover the same property.

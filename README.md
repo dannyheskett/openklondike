@@ -142,8 +142,8 @@ make ios       # -> build/openklondike.ipa           (device arm64, unsigned)
 ```
 
 The `.ipa` is unsigned unless `IOS_SIGN_IDENTITY` / `IOS_PROFILE` / `IOS_TEAM_ID`
-are set; AWS Device Farm re-signs an unsigned one on upload. C sources build with `clang`, the
-Objective-C++ backend (`ios/`) with `clang++`.
+are set. C sources build with `clang`, the Objective-C++ backend (`ios/`) with
+`clang++`.
 
 ### Web (needs Emscripten)
 
@@ -173,10 +173,6 @@ Unit tests with no raylib and no window — `make test` runs all three:
 ```bash
 make test
 ```
-
-There is also a manual real-device check: the
-[`devicefarm`](.github/workflows/devicefarm.yml) workflow builds the APK and the
-`.ipa` and runs an AWS Device Farm fuzz test on real hardware.
 
 ## Continuous integration and releases
 

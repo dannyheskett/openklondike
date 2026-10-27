@@ -14,19 +14,3 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
-
-  # scripts/requirements.txt pins boto3 for the Device Farm runner
-  # (scripts/devicefarm_run.py). The pin exists so the devicefarm workflow
-  # installs a known version rather than whatever pip resolves that day; this
-  # entry is what keeps that pin from going stale.
-  - package-ecosystem: "pip"
-    directory: "/scripts"
-    schedule:
-      interval: "weekly"
-    # pull requests go to staging: main only takes staging's (the rulesets)
-    target-branch: "staging"
-    commit-message:
-      prefix: "ci"
-    groups:
-      pip:
-        patterns: ["*"]

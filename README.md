@@ -180,18 +180,24 @@ There is also a manual real-device check: the
 
 ## Continuous integration and releases
 
-Every pull request to `main` builds all platforms via GitHub Actions
+Work branches merge into `staging` (squash) and `main` takes merges from
+`staging` only. Every pull request builds all platforms via GitHub Actions
 ([`ci.yml`](.github/workflows/ci.yml)) — Linux, Windows (x64/x86), macOS
 (universal), Android (APK + a packaging check of the AAB), Web (WASM), and iOS
 (a Metal app booted in the Simulator and screenshotted) — and runs `make test`.
 All checks must pass to merge.
 
-Pushing to `main` cuts the next `release-N` via
-[`release.yml`](.github/workflows/release.yml), which attaches per-platform
-archives, the Android APK and AAB, the iOS `.ipa` and the WASM bundle to the
-GitHub Release; when the store secrets are set it also uploads the AAB to the
-Play internal track, uploads the `.ipa` to TestFlight and submits it to App
-Review. Setup:
+Merging `staging` into `main` runs [`build.yml`](.github/workflows/build.yml),
+which builds every platform, tags the next `release-N` and attaches the
+per-platform archives, the Android APK and AAB, the signed iOS `.ipa` and the
+WASM bundle to the GitHub Release. It never ships to a store. (danheskett.com
+picks up the newest GitHub Release's web build when the site builds.)
+
+Shipping is the separate, manual [`release.yml`](.github/workflows/release.yml):
+it takes a `release-N` and ships it to Google Play (the track you pick), then
+the App Store (TestFlight for internal testers, then App Review — withdrawing
+any earlier version still pending review), stops at the first failure, and
+reads each store back at the end. Setup:
 [`android/play-assets/KEYSTORE.md`](android/play-assets/KEYSTORE.md) and
 [`ios/app-store-assets/TESTFLIGHT.md`](ios/app-store-assets/TESTFLIGHT.md).
 

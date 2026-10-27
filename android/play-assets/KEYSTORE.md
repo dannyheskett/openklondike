@@ -42,10 +42,11 @@ New repository secret**.)
 
 ## 3. That's it
 
-The next release (any push to `main`, or a manual `release` run) will detect the
-secret and produce `openklondike-<version>-android.aab` alongside the sideload
-APK. Download it from the release assets (or the `android` CI artifact) and
-upload it in the Play Console.
+Every build (`build.yml`, on each merge of `staging` into `main`) requires these
+secrets -- a missing one fails the build -- and produces
+`openklondike-<version>-android.aab` alongside the sideload APK, attached to the
+GitHub Release. The `release` workflow uploads that AAB to the Play track you
+pick and reads the track back.
 
 ## Note on Play App Signing enrollment
 

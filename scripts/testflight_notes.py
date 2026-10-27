@@ -14,22 +14,29 @@ Environment:
   ASC_KEY_P8      the .p8 private key contents
   ASC_KEY_ID      key id
   ASC_ISSUER_ID   issuer id
-  BUNDLE_ID       app bundle id, e.g. com.danheskett.openklondike
+  BUNDLE_ID       app bundle id, e.g. com.danheskett.openrackem
   BUILD_VERSION   CFBundleVersion to wait for (the release number)
   NOTES           the "What to Test" text
   TIMEOUT_MIN     how long to wait for processing (default 25)
+
+Every API call retries temporary errors (HTTP 429/5xx, network failures) up to
+three times, then fails (scripts/net_retry.py). A build that never reaches VALID
+fails the run.
 """
 import base64
 import json
 import os
 import sys
 import time
-import urllib.error
 import urllib.request
+from pathlib import Path
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import net_retry  # noqa: E402
 
 BASE = "https://api.appstoreconnect.apple.com"
 KEY_ID = os.environ["ASC_KEY_ID"]
@@ -57,16 +64,18 @@ def call(method, path, body=None):
         headers={"Authorization": "Bearer " + token(),
                  "Content-Type": "application/json"})
     try:
-        raw = urllib.request.urlopen(req).read()
+        raw = net_retry.request(req, f"{method} {path}")
         return json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode()
+    except net_retry.HTTPFailure as e:
+        detail = e.text
         try:
             errs = json.loads(detail).get("errors", [])
             detail = "; ".join(f"{x.get('code')}: {x.get('detail')}" for x in errs)
         except Exception:
             pass
         raise SystemExit(f"{method} {path} -> HTTP {e.code}: {detail}")
+    except net_retry.NetworkFailure as e:
+        raise SystemExit(str(e))
 
 
 def main():
@@ -130,8 +139,10 @@ def main():
         n = len(call("GET", f"/v1/betaGroups/{g['id']}/betaTesters?limit=200")["data"])
         print(f"  group {a.get('name')!r}: internal={a.get('isInternalGroup')} "
               f"allBuilds={a.get('hasAccessToAllBuilds')} testers={n}")
-    if not groups:
-        print("  WARNING: no beta groups exist, so no testers will receive this build")
+    if not any(g["attributes"].get("isInternalGroup") and g["attributes"].get("hasAccessToAllBuilds")
+               for g in groups):
+        raise SystemExit("no internal beta group with access to all builds exists, "
+                         "so no tester receives this build; create one in App Store Connect")
 
     print(f"build {want} is distributed to internal testers with release notes")
 

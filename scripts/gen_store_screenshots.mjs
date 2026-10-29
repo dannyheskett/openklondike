@@ -10,10 +10,10 @@
 //   ./scripts/build_raylib_web.sh && make web
 //   node scripts/gen_store_screenshots.mjs
 //
-// Requires playwright (the @playwright/mcp install ships one; PLAYWRIGHT_PATH
-// overrides the module location, and CHROMIUM_PATH a browser binary, for the
-// common case where the module and the downloaded browsers are different
-// revisions).
+// Requires playwright-core, found in a node_modules on the way up from this
+// script (PLAYWRIGHT_PATH overrides the module location), and drives the browser
+// CHROME names, the same variable the other repos' screenshot scripts read;
+// without it, playwright-core's default.
 //
 // The game is WebGL, so the browser needs a GL backend. On a headless machine
 // there is no GPU, hence the SwiftShader flags below -- without them the canvas
@@ -34,7 +34,7 @@ import { createRequire } from 'node:module';
 import { inflateSync, deflateSync } from 'node:zlib';
 
 const require = createRequire(import.meta.url);
-const PLAYWRIGHT = process.env.PLAYWRIGHT_PATH || 'playwright';
+const PLAYWRIGHT = process.env.PLAYWRIGHT_PATH || 'playwright-core';
 const { chromium } = require(PLAYWRIGHT);
 
 const WEB_DIR = 'build/web';
@@ -320,7 +320,7 @@ async function shoot(page, target, name) {
 async function main() {
   const server = await serve();
   const browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM_PATH || undefined,
+    executablePath: process.env.CHROME || undefined,
     args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
   });
 
